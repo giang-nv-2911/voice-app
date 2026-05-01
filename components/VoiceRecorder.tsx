@@ -16,7 +16,8 @@ export default function VoiceRecorder({ onResult }: VoiceRecorderProps) {
     error, 
     startRecording, 
     stopRecording, 
-    isSupported 
+    isSupported,
+    hasChecked
   } = useSpeechRecognition();
 
   useEffect(() => {
@@ -26,11 +27,23 @@ export default function VoiceRecorder({ onResult }: VoiceRecorderProps) {
     }
   }, [isRecording, transcript, onResult]);
 
+  if (!hasChecked) {
+    return (
+      <div className="flex flex-col items-center gap-4 mt-10">
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+        <p className="text-sm text-slate-400 font-medium">Đang kiểm tra trình duyệt...</p>
+      </div>
+    );
+  }
+
   if (!isSupported) {
     return (
       <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl flex items-center gap-3">
         <AlertCircle size={24} />
-        <p className="text-sm font-medium">Trình duyệt không hỗ trợ Web Speech API.</p>
+        <div>
+          <p className="text-sm font-bold">Trình duyệt không hỗ trợ Web Speech API.</p>
+          <p className="text-xs opacity-80 mt-0.5">Vui lòng sử dụng Chrome (Android) hoặc Safari (iOS).</p>
+        </div>
       </div>
     );
   }
