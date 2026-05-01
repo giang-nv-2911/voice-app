@@ -8,10 +8,11 @@ import { useLiveQuery } from 'dexie-react-hooks';
 
 interface DebtFormProps {
   parsedData: ParsedDebtResult | null;
+  transcript?: string;
   onSaved: () => void;
 }
 
-export default function DebtForm({ parsedData, onSaved }: DebtFormProps) {
+export default function DebtForm({ parsedData, transcript, onSaved }: DebtFormProps) {
   const [formData, setFormData] = useState<ParsedDebtResult>({
     nguoi_no: '',
     so_tien: 0,
@@ -98,6 +99,15 @@ export default function DebtForm({ parsedData, onSaved }: DebtFormProps) {
 
   return (
     <div className="w-full max-w-md mt-6 p-7 bg-white dark:bg-slate-900 rounded-[2rem] shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-500 ease-out">
+      {transcript && (
+        <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border-l-4 border-indigo-500">
+          <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-1">Dữ liệu gốc (Máy nghe được)</p>
+          <p className="text-slate-600 dark:text-slate-300 italic font-medium">
+            &ldquo;{transcript}&rdquo;
+          </p>
+        </div>
+      )}
+
       <h3 className="text-xl font-extrabold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
         <CheckCircle className="text-emerald-500 w-6 h-6"/>
         Xác nhận thông tin
@@ -115,7 +125,7 @@ export default function DebtForm({ parsedData, onSaved }: DebtFormProps) {
               required
               className={`
                 w-full px-5 py-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border-2 outline-none transition-all dark:text-white font-medium text-lg placeholder:text-slate-400
-                ${matchedUser ? 'border-emerald-500/30' : isNewUser ? 'border-amber-500/30' : 'border-transparent focus:border-indigo-500'}
+                ${matchedUser ? 'border-emerald-500/30' : isNewUser && formData.nguoi_no ? 'border-amber-500/30' : !formData.nguoi_no ? 'border-amber-500/50 animate-pulse' : 'border-transparent focus:border-indigo-500'}
               `}
               placeholder="Tên người nợ"
             />
@@ -127,7 +137,7 @@ export default function DebtForm({ parsedData, onSaved }: DebtFormProps) {
             )}
           </div>
 
-          {isNewUser && (
+          {isNewUser && formData.nguoi_no && (
             <div className="p-3.5 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-100 dark:border-amber-800/30 flex flex-col gap-2.5 animate-in slide-in-from-top-1 duration-200">
               <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
                 <AlertCircle size={16} />
@@ -153,7 +163,9 @@ export default function DebtForm({ parsedData, onSaved }: DebtFormProps) {
         
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <label className="block text-sm font-bold text-slate-600 dark:text-slate-400">Số tiền (VNĐ)</label>
+            <label className="block text-sm font-bold text-slate-600 dark:text-slate-400">
+              Số tiền (VNĐ) {formData.so_tien === 0 && <span className="text-rose-500 ml-1">⚠️</span>}
+            </label>
             <input 
               type="number" 
               name="so_tien"
@@ -161,7 +173,10 @@ export default function DebtForm({ parsedData, onSaved }: DebtFormProps) {
               onChange={handleChange}
               required
               min="0"
-              className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border-2 border-transparent focus:border-indigo-500 outline-none transition-all dark:text-white font-mono text-lg font-bold text-indigo-600 dark:text-indigo-400"
+              className={`
+                w-full px-5 py-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border-2 outline-none transition-all dark:text-white font-mono text-lg font-bold
+                ${formData.so_tien === 0 ? 'border-rose-500/50 bg-rose-50/20 animate-shake' : 'border-transparent focus:border-indigo-500 text-indigo-600 dark:text-indigo-400'}
+              `}
             />
           </div>
           <div className="space-y-1.5">

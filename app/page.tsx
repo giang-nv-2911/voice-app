@@ -10,9 +10,11 @@ import { ReceiptText } from "lucide-react";
 
 export default function Home() {
   const [parsedData, setParsedData] = useState<ParsedDebtResult | null>(null);
+  const [lastTranscript, setLastTranscript] = useState<string>("");
 
   const handleSpeechResult = useCallback((text: string) => {
     if (text.trim().split(" ").length < 2) return;
+    setLastTranscript(text);
     const data = parseSpeechToDebt(text);
     setParsedData(data);
   }, []);
@@ -26,7 +28,7 @@ export default function Home() {
           </h1>
           <p className="font-bold text-slate-800 dark:text-slate-200 mt-1">Giọng nói</p>
         </div>
-        <Link 
+        <Link
           href="/report"
           className="p-3.5 bg-white dark:bg-slate-900 rounded-[1.25rem] shadow-lg shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-800 text-indigo-600 dark:text-indigo-400 hover:scale-105 active:scale-95 transition-all"
         >
@@ -37,12 +39,19 @@ export default function Home() {
       <div className="w-full max-w-md flex flex-col items-center">
         <div className="text-center mb-8 px-5 py-4 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-[1.5rem] border border-indigo-100/50 dark:border-indigo-800/30">
           <p className="text-indigo-900/90 dark:text-indigo-300 font-semibold mb-1">Bấm vào micro và đọc nội dung cần ghi</p>
-          <p className="text-sm text-indigo-700/60 dark:text-indigo-400/60 italic sm:inline-block">vd: &quot;anh Nam nợ 200k tiền ăn sáng&quot;</p>
+          <p className="text-sm text-indigo-700/60 dark:text-indigo-400/60 italic sm:inline-block">vd: &quot;anh Nam nợ 200k tiền ăn sáng ngày 30 tháng 4 năm 2026&quot;</p>
         </div>
 
         <VoiceRecorder onResult={handleSpeechResult} />
 
-        <DebtForm parsedData={parsedData} onSaved={() => setParsedData(null)} />
+        <DebtForm
+          parsedData={parsedData}
+          transcript={lastTranscript}
+          onSaved={() => {
+            setParsedData(null);
+            setLastTranscript("");
+          }}
+        />
       </div>
     </main>
   );
