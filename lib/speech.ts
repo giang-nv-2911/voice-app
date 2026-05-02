@@ -41,10 +41,20 @@ export function useSpeechRecognition() {
           for (let i = 0; i < event.results.length; ++i) {
             const result = event.results[i];
             const resultText = result[0].transcript;
+            
             if (result.isFinal) {
-              finalTranscript += resultText;
+              const currentTrimmed = finalTranscript.trim().toLowerCase();
+              const newTrimmed = resultText.trim().toLowerCase();
+              
+              // Smart Merge: Nếu kết quả mới bắt đầu bằng kết quả cũ (cumulative), thì thay thế.
+              // Nếu không, thì cộng dồn (incremental).
+              if (newTrimmed.length > currentTrimmed.length && newTrimmed.startsWith(currentTrimmed)) {
+                finalTranscript = resultText;
+              } else {
+                finalTranscript += (finalTranscript ? " " : "") + resultText.trim();
+              }
             } else {
-              currentInterim += resultText;
+              currentInterim = resultText; // Interim thường chỉ lấy cái cuối cùng trôi nổi
             }
           }
           
