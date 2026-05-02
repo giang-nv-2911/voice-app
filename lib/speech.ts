@@ -35,22 +35,21 @@ export function useSpeechRecognition() {
         recog.lang = 'vi-VN';
 
         recog.onresult = (event: any) => {
+          let finalTranscript = "";
           let currentInterim = "";
-          let newFinal = "";
 
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-              newFinal += event.results[i][0].transcript;
+          for (let i = 0; i < event.results.length; ++i) {
+            const result = event.results[i];
+            const resultText = result[0].transcript;
+            if (result.isFinal) {
+              finalTranscript += resultText;
             } else {
-              currentInterim += event.results[i][0].transcript;
+              currentInterim += resultText;
             }
           }
           
-          if (newFinal) {
-            setTranscript((prev) => {
-              const separator = prev.length > 0 && !prev.endsWith(" ") ? " " : "";
-              return (prev + separator + newFinal.trim()).trim();
-            });
+          if (finalTranscript) {
+            setTranscript(finalTranscript.trim());
           }
           
           setInterimTranscript(currentInterim);
