@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 declare global {
   interface Window {
@@ -11,11 +11,16 @@ declare global {
 
 export function useSpeechRecognition() {
   const [isRecording, setIsRecording] = useState(false);
+  const isRecordingRef = useRef(isRecording);
   const [transcript, setTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [recognition, setRecognition] = useState<any>(null);
   const [hasChecked, setHasChecked] = useState(false);
+
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -29,37 +34,46 @@ export function useSpeechRecognition() {
       }
 
       try {
+        const isAndroid = /Android/i.test(navigator.userAgent);
         const recog = new SpeechRecognition();
-        recog.continuous = true;
+        
+        // Android thường bị bug lặp chữ khi bật continuous, nên ta sẽ quản lý thủ công
+        recog.continuous = !isAndroid; 
         recog.interimResults = true;
         recog.lang = 'vi-VN';
 
         recog.onresult = (event: any) => {
-          let finalTranscript = "";
+          const finalFragments: string[] = [];
           let currentInterim = "";
 
           for (let i = 0; i < event.results.length; ++i) {
             const result = event.results[i];
-            const resultText = result[0].transcript;
+            const resultText = result[0].transcript.trim();
             
-            if (result.isFinal) {
-              const currentTrimmed = finalTranscript.trim().toLowerCase();
-              const newTrimmed = resultText.trim().toLowerCase();
-              
-              // Smart Merge: Nếu kết quả mới bắt đầu bằng kết quả cũ (cumulative), thì thay thế.
-              // Nếu không, thì cộng dồn (incremental).
-              if (newTrimmed.length > currentTrimmed.length && newTrimmed.startsWith(currentTrimmed)) {
-                finalTranscript = resultText;
-              } else {
-                finalTranscript += (finalTranscript ? " " : "") + resultText.trim();
-              }
-            } else {
-              currentInterim = resultText; // Interim thường chỉ lấy cái cuối cùng trôi nổi
+            if (result.isFinal && resultText) {
+              finalFragments.push(resultText);
+            } else if (!result.isFinal) {
+              currentInterim = resultText;
             }
           }
           
-          if (finalTranscript) {
-            setTranscript(finalTranscript.trim());
+          // Lọc bỏ trùng lặp thông minh hơn
+          const uniqueFragments = finalFragments.filter((current, idx) => {
+            const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+            const currentNorm = normalize(current);
+            if (!currentNorm) return false;
+
+            return !finalFragments.some((other, otherIdx) => {
+              if (idx === otherIdx) return false;
+              const otherNorm = normalize(other);
+              return otherNorm.length > currentNorm.length && otherNorm.includes(currentNorm);
+            });
+          });
+
+          const mergedTranscript = uniqueFragments.join(" ").trim();
+          
+          if (mergedTranscript) {
+            setTranscript(mergedTranscript);
           }
           
           setInterimTranscript(currentInterim);
@@ -77,7 +91,17 @@ export function useSpeechRecognition() {
 
         recog.onend = () => {
           console.log("Speech recognition ended");
-          setIsRecording(false);
+          // Nếu vẫn đang trong trạng thái ghi âm (isRecording) mà máy tự ngắt (thường trên Android), hãy khởi động lại
+          if (isRecordingRef.current) {
+            try {
+              recog.start();
+            } catch (e) {
+              console.error("Failed to auto-restart recognition:", e);
+              setIsRecording(false);
+            }
+          } else {
+            setIsRecording(false);
+          }
         };
 
         setRecognition(recog);
