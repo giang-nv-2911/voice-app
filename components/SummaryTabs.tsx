@@ -8,7 +8,12 @@ import { TrendingUp, Users, Package, Calendar } from 'lucide-react';
 export default function SummaryTabs({ debts }: { debts: IDebt[] }) {
   const [activeTab, setActiveTab] = useState<'person' | 'product' | 'date'>('person');
 
-  const totalAmount = useMemo(() => debts.reduce((sum, d) => sum + d.so_tien, 0), [debts]);
+  const totalAmount = useMemo(() => {
+    return debts.reduce((sum, d) => {
+      const value = d.so_tien || 0;
+      return d.loai === 'tra' ? sum - value : sum + value;
+    }, 0);
+  }, [debts]);
 
   const summaryData = useMemo(() => {
     const summary: Record<string, number> = {};
@@ -18,8 +23,14 @@ export default function SummaryTabs({ debts }: { debts: IDebt[] }) {
       if (activeTab === 'product') key = d.noi_dung || 'Khác';
       if (activeTab === 'date') key = d.ngay;
       
+      const value = d.so_tien || 0;
       if (!summary[key]) summary[key] = 0;
-      summary[key] += d.so_tien;
+      
+      if (d.loai === 'tra') {
+        summary[key] -= value;
+      } else {
+        summary[key] += value;
+      }
     }
     return Object.entries(summary).sort((a, b) => {
       if (activeTab === 'date') return b[0].localeCompare(a[0]);

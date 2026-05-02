@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from 'react';
-import { IUser } from '@/types/debt';
+import { IUser, IDebt } from '@/types/debt';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, updateUser, deleteUser, getDebtsByUser } from '@/lib/db';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -103,7 +103,13 @@ export default function UserManagement() {
 function UserHistory({ user, onBack }: { user: IUser, onBack: () => void }) {
   const rawUserDebts = useLiveQuery(() => getDebtsByUser(user.name));
   const userDebts = useMemo(() => rawUserDebts || [], [rawUserDebts]);
-  const total = useMemo(() => userDebts.reduce((s, d) => s + d.so_tien, 0), [userDebts]);
+  
+  const total = useMemo(() => {
+    return userDebts.reduce((s: number, d: IDebt) => {
+      const val = d.so_tien || 0;
+      return d.loai === 'tra' ? s - val : s + val;
+    }, 0);
+  }, [userDebts]);
 
   return (
     <motion.div 
@@ -156,8 +162,8 @@ function UserHistory({ user, onBack }: { user: IUser, onBack: () => void }) {
                   <p className="text-[10px] text-slate-400 font-bold uppercase">{format(new Date(debt.ngay), 'dd/MM/yyyy')}</p>
                 </div>
                 <div className="flex flex-col items-end">
-                  <span className="text-lg font-black text-rose-500 tracking-tight">
-                    {debt.so_tien.toLocaleString('vi-VN')}
+                  <span className={`text-lg font-black tracking-tight ${debt.loai === 'tra' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                    {debt.loai === 'tra' ? '-' : ''}{debt.so_tien.toLocaleString('vi-VN')}
                   </span>
                   <p className="text-[10px] font-bold text-slate-400 uppercase">vnđ</p>
                 </div>
