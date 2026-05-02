@@ -5,14 +5,40 @@ import { IUser, IDebt } from '@/types/debt';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, updateUser, deleteUser, getDebtsByUser } from '@/lib/db';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Edit2, Trash2, ChevronRight, User as UserIcon, X, History, ArrowLeft } from 'lucide-react';
+import { Edit2, Trash2, ChevronRight, User as UserIcon, X, History, ArrowLeft, Cloud, HardDrive } from 'lucide-react';
 import { format } from 'date-fns';
+import { useAuth } from '@/hooks/useAuth';
+import api from '@/lib/api';
+import ConfirmModal from '@/components/ConfirmModal';
 
-export default function UserManagement() {
-  const users = useLiveQuery(() => db.users.toArray()) || [];
+interface UserManagementProps {
+  debts?: IDebt[]; // Changed from any[]
+}
+
+export default function UserManagement({ debts }: UserManagementProps) {
+  const { user } = useAuth();
+  const isRemote = !!user;
+  
+  const localUsers = useLiveQuery(() => db.users.toArray()) || [];
+  
+  // If remote, derive users from debts prop
+  const remoteUsers: IUser[] = useMemo(() => {
+    if (!isRemote || !debts) return [];
+    const uniqueNames = Array.from(new Set(debts.map(d => d.nguoi_no)));
+    return uniqueNames.map((name, index) => ({
+      id: index + 1, // Synthetic ID for UI
+      name
+    }));
+  }, [isRemote, debts]);
+
+  const users = isRemote ? remoteUsers : localUsers;
+
   const [editingUser, setEditingUser] = useState<IUser | null>(null);
   const [selectedUser, setSelectedUser] = useState<IUser | null>(null);
   const [newName, setNewName] = useState('');
+  
+  const [modalOpen, setModalOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<IUser | null>(null);
 
   const handleEdit = (user: IUser) => {
     setEditingUser(user);
@@ -26,10 +52,25 @@ export default function UserManagement() {
     }
   };
 
-  const handleDelete = async (user: IUser) => {
-    if (user.id && confirm(`Bạn có chắc muốn xóa người nợ "${user.name}"?`)) {
-      await deleteUser(user.id);
+  const handleConfirmDelete = async () => {
+    if (userToDelete) {
+      const u = userToDelete;
+      try {
+        if (isRemote) {
+          await api.delete(`/api/debts/debtor/${encodeURIComponent(u.name)}`);
+        } else if (u.id) {
+          await deleteUser(u.id);
+        }
+        window.location.reload();
+      } catch (error) {
+        console.error("Delete user failed:", error);
+      }
     }
+  };
+
+  const handleDeleteClick = (u: IUser) => {
+    setUserToDelete(u);
+    setModalOpen(true);
   };
 
   return (
@@ -71,7 +112,10 @@ export default function UserManagement() {
                       </div>
                     ) : (
                       <div className="cursor-pointer flex-1" onClick={() => setSelectedUser(user)}>
-                        <h4 className="font-bold text-lg text-slate-800 dark:text-white group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{user.name}</h4>
+                        <h4 className="font-bold text-lg text-slate-800 dark:text-white group-hover:text-indigo-600 transition-colors uppercase tracking-tight flex items-center gap-2">
+                          {user.name}
+                          {isRemote ? <Cloud size={12} className="text-indigo-400" /> : <HardDrive size={12} className="text-amber-400" />}
+                        </h4>
                         <p className="text-[10px] text-slate-400 font-bold uppercase">Nhấn để xem chi tiết</p>
                       </div>
                     )}
@@ -81,7 +125,7 @@ export default function UserManagement() {
                     <button onClick={() => handleEdit(user)} className="p-2.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-full transition-all">
                       <Edit2 size={18} />
                     </button>
-                    <button onClick={() => handleDelete(user)} className="p-2.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-full transition-all">
+                    <button onClick={() => handleDeleteClick(user)} className="p-2.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-full transition-all">
                       <Trash2 size={18} />
                     </button>
                     <button onClick={() => setSelectedUser(user)} className="p-2.5 text-slate-400 hover:text-slate-600 rounded-full ml-1">
@@ -93,16 +137,31 @@ export default function UserManagement() {
             )}
           </motion.div>
         ) : (
-          <UserHistory user={selectedUser} onBack={() => setSelectedUser(null)} />
+          <UserHistory 
+            user={selectedUser} 
+            onBack={() => setSelectedUser(null)} 
+            debts={isRemote ? debts?.filter(d => d.nguoi_no === selectedUser.name) : undefined}
+          />
         )}
       </AnimatePresence>
+
+      <ConfirmModal 
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Xác nhận xóa"
+        message={`Bạn có chắc chắn muốn chuyển toàn bộ công nợ của "${userToDelete?.name}" vào thùng rác không?`}
+        confirmText="Đồng ý xóa"
+        cancelText="Để tôi xem lại"
+        type="danger"
+      />
     </div>
   );
 }
 
-function UserHistory({ user, onBack }: { user: IUser, onBack: () => void }) {
-  const rawUserDebts = useLiveQuery(() => getDebtsByUser(user.name));
-  const userDebts = useMemo(() => rawUserDebts || [], [rawUserDebts]);
+function UserHistory({ user, onBack, debts }: { user: IUser, onBack: () => void, debts?: IDebt[] }) {
+  const rawUserDebts = useLiveQuery(() => debts ? null : getDebtsByUser(user.name));
+  const userDebts = useMemo(() => debts || rawUserDebts || [], [debts, rawUserDebts]);
   
   const total = useMemo(() => {
     return userDebts.reduce((s: number, d: IDebt) => {

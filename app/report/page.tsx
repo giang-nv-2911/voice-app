@@ -1,28 +1,83 @@
 "use client";
 
-import { useState, useMemo } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '@/lib/db';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, BarChart3, Users, ReceiptText, Trash2 } from 'lucide-react';
+import { ChevronLeft, BarChart3, Users, ReceiptText, Trash2, Loader2, Cloud, HardDrive } from 'lucide-react';
 import FilterBar, { FilterState } from '@/components/FilterBar';
 import DebtList from '@/components/DebtList';
 import SummaryTabs from '@/components/SummaryTabs';
 import UserManagement from '@/components/UserManagement';
-import { clearAllData } from '@/lib/db';
+import TrashList from '@/components/TrashList';
+import ConfirmModal from '@/components/ConfirmModal';
+import { clearAllData, db } from '@/lib/db';
+import api from '@/lib/api';
+import { useAuth } from '@/hooks/useAuth';
+import { IDebt } from '@/types/debt';
 
-type ViewMode = 'summary' | 'users' | 'list';
+type ViewMode = 'summary' | 'users' | 'list' | 'trash';
 
 export default function ReportPage() {
+  const { user } = useAuth();
   const [activeView, setActiveView] = useState<ViewMode>('summary');
+  const [rawDebts, setRawDebts] = useState<IDebt[]>([]);
+  const [deletedDebts, setDeletedDebts] = useState<IDebt[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
   
-  const handleClear = async () => {
-    if (confirm("HÀNH ĐỘNG NÀY SẼ XÓA TOÀN BỘ DỮ LIỆU NỢ VÀ NGƯỜI DÙNG! Bạn có chắc chắn không?")) {
-      await clearAllData();
-      alert("Đã xóa sạch dữ liệu.");
-      window.location.reload();
+  useEffect(() => {
+    async function fetchData() {
+      setIsLoading(true);
+      try {
+        if (user) {
+          // LOGGED IN: Fetch from backend
+          const [debtsRes, trashRes] = await Promise.all([
+            api.get('/api/debts'),
+            api.get('/api/debts/trash')
+          ]);
+          
+          const mapDebt = (d: any) => ({
+            id: d.id,
+            nguoi_no: d.debtor_name,
+            so_tien: Number(d.amount),
+            noi_dung: d.description || '',
+            ngay: d.date.split('T')[0],
+            loai: d.type === 'borrow' ? 'tra' : 'no',
+            status: d.status,
+            deleted_at: d.deleted_at
+          });
+
+          setRawDebts(debtsRes.data.map(mapDebt));
+          setDeletedDebts(trashRes.data.map(mapDebt));
+        } else {
+          // NOT LOGGED IN: Fetch from local Dexie
+          const [localDebts, localTrash] = await Promise.all([
+            db.debts.toArray(),
+            db.deletedDebts.toArray()
+          ]);
+          setRawDebts(localDebts || []);
+          setDeletedDebts(localTrash || []);
+        }
+      } catch (error) {
+        console.error("Failed to fetch data:", error);
+      } finally {
+        setIsLoading(false);
+      }
     }
+    fetchData();
+  }, [user]);
+
+  const handleConfirmClear = async () => {
+    if (user) {
+      alert("Tính năng xóa sạch trên server đang được phát triển.");
+    } else {
+      await clearAllData();
+      setRawDebts([]);
+    }
+  };
+
+  const handleClearClick = () => {
+    setModalOpen(true);
   };
 
   const [filters, setFilters] = useState<FilterState>({
@@ -32,9 +87,6 @@ export default function ReportPage() {
     toDate: ''
   });
 
-  const rawDebtsResult = useLiveQuery(() => db.debts.toArray());
-  const rawDebts = useMemo(() => rawDebtsResult || [], [rawDebtsResult]);
-
   const filteredDebts = useMemo(() => {
     return rawDebts.filter(d => {
       const matchPerson = filters.person === '' || d.nguoi_no.toLowerCase().includes(filters.person.toLowerCase());
@@ -43,13 +95,14 @@ export default function ReportPage() {
       const matchToDate = filters.toDate === '' || d.ngay <= filters.toDate;
       
       return matchPerson && matchProduct && matchFromDate && matchToDate;
-    }).sort((a, b) => (b.id || 0) - (a.id || 0)); // Sort by newest
+    }).sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
   }, [rawDebts, filters]);
 
   const tabs: { id: ViewMode; label: string; icon: React.ElementType }[] = [
     { id: 'summary', label: 'Thống kê', icon: BarChart3 },
     { id: 'users', label: 'Người nợ', icon: Users },
     { id: 'list', label: 'Lịch sử', icon: ReceiptText },
+    { id: 'trash', label: 'Thùng rác', icon: Trash2 },
   ];
 
   return (
@@ -61,9 +114,22 @@ export default function ReportPage() {
         >
           <ChevronLeft size={24} />
         </Link>
-        <h1 className="text-3xl font-black bg-gradient-to-r from-indigo-600 via-purple-600 to-rose-500 bg-clip-text text-transparent transform transition-all whitespace-nowrap">Báo cáo</h1>
+        <div className="flex flex-col items-center">
+          <h1 className="text-4xl font-black bg-gradient-to-br from-indigo-600 via-purple-600 to-rose-500 bg-clip-text text-transparent transform transition-all tracking-tight">Báo cáo</h1>
+          <div className="flex items-center gap-1.5 mt-1">
+            {user ? (
+              <span className="flex items-center gap-1.5 text-[9px] font-black text-indigo-500 uppercase tracking-[0.2em] bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-full border border-indigo-100 dark:border-indigo-800/50">
+                <Cloud size={10} className="animate-pulse" /> Cloud Sync
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-[9px] font-black text-amber-500 uppercase tracking-[0.2em] bg-amber-50 dark:bg-amber-900/30 px-3 py-1 rounded-full border border-amber-100 dark:border-amber-800/50">
+                <HardDrive size={10} /> Offline Mode
+              </span>
+            )}
+          </div>
+        </div>
         <button 
-          onClick={handleClear}
+          onClick={handleClearClick}
           className="p-3 bg-white dark:bg-slate-900 rounded-full shadow-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 active:scale-95 transition-all border border-slate-100 dark:border-slate-800"
           title="Xóa toàn bộ dữ liệu"
         >
@@ -78,45 +144,69 @@ export default function ReportPage() {
           onReset={() => setFilters({ person: '', product: '', fromDate: '', toDate: '' })} 
         />
         
-        <div className="sticky top-4 z-20 flex p-1.5 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 rounded-[1.75rem] shadow-xl overflow-x-auto no-scrollbar">
+        <div className="sticky top-6 z-30 flex gap-1 p-1 bg-white/40 dark:bg-slate-900/40 backdrop-blur-2xl border border-white/20 dark:border-white/5 rounded-[2rem] shadow-2xl shadow-indigo-500/10 overflow-x-auto no-scrollbar">
           {tabs.map(tab => (
             <button 
               key={tab.id}
               onClick={() => setActiveView(tab.id)}
               className={`
-                relative flex-1 flex items-center justify-center gap-2 py-3 px-2 rounded-xl text-xs font-black transition-all duration-300 uppercase tracking-tighter
-                ${activeView === tab.id ? 'text-indigo-600 dark:text-white' : 'text-slate-400 hover:text-slate-600'}
+                relative flex-1 flex flex-col items-center justify-center gap-1 py-3 px-1 rounded-2xl text-[9px] font-black transition-all duration-500 uppercase tracking-widest min-w-[70px]
+                ${activeView === tab.id ? 'text-indigo-600 dark:text-white' : 'text-slate-400 hover:text-slate-500'}
               `}
             >
               {activeView === tab.id && (
                 <motion.div 
                   layoutId="activeViewBg"
-                  className="absolute inset-0 bg-indigo-50 dark:bg-slate-800 rounded-xl"
-                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  className="absolute inset-0 bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700/50 rounded-2xl"
+                  transition={{ type: "spring", bounce: 0.15, duration: 0.5 }}
                 />
               )}
-              <tab.icon size={16} className={`relative z-10 ${activeView === tab.id ? 'text-indigo-500' : 'text-slate-400'}`} />
+              <tab.icon size={18} className={`relative z-10 transition-transform duration-500 ${activeView === tab.id ? 'text-indigo-500 scale-110' : 'text-slate-400'}`} />
               <span className="relative z-10">{tab.label}</span>
+              {tab.id === 'trash' && deletedDebts.length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-gradient-to-br from-rose-500 to-pink-600 text-white text-[9px] flex items-center justify-center rounded-full border-2 border-white dark:border-slate-900 shadow-lg relative z-20 animate-in zoom-in duration-300">
+                  {deletedDebts.length}
+                </span>
+              )}
             </button>
           ))}
         </div>
 
         <div className="mt-8">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeView}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-            >
-              {activeView === 'summary' && <SummaryTabs debts={filteredDebts} />}
-              {activeView === 'users' && <UserManagement />}
-              {activeView === 'list' && <DebtList debts={filteredDebts} />}
-            </motion.div>
-          </AnimatePresence>
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-20 animate-in fade-in duration-500">
+               <Loader2 className="w-10 h-10 text-indigo-500 animate-spin mb-4" />
+               <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">Đang tải dữ liệu...</p>
+            </div>
+          ) : (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeView}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+              >
+                {activeView === 'summary' && <SummaryTabs debts={filteredDebts} />}
+                {activeView === 'users' && <UserManagement debts={rawDebts} />}
+                {activeView === 'list' && <DebtList debts={filteredDebts} />}
+                {activeView === 'trash' && <TrashList debts={deletedDebts} />}
+              </motion.div>
+            </AnimatePresence>
+          )}
         </div>
       </div>
+
+      <ConfirmModal 
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onConfirm={handleConfirmClear}
+        title="Xóa toàn bộ dữ liệu?"
+        message={`HÀNH ĐỘNG NÀY SẼ XÓA VĨNH VIỄN TOÀN BỘ DỮ LIỆU NỢ ${user ? 'trên SERVER' : 'cục bộ'}! Bạn có thực sự chắc chắn không?`}
+        confirmText="Xóa sạch tất cả"
+        cancelText="Không, dừng lại"
+        type="danger"
+      />
     </main>
   );
 }

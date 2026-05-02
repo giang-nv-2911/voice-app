@@ -3,9 +3,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ParsedDebtResult, IDebt } from '@/types/debt';
 import { Save, CheckCircle, UserPlus, AlertCircle, Loader2, Edit2, ReceiptText, CreditCard, Calendar } from 'lucide-react';
-import { addDebt, addUser, db } from '@/lib/db';
+import { addDebt, addUser, db, bulkMoveToTrash } from '@/lib/db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { motion, AnimatePresence } from 'framer-motion';
+import api from '@/lib/api';
+import { useAuth } from '@/hooks/useAuth';
 
 interface DebtFormProps {
   parsedData: ParsedDebtResult | null;
@@ -144,81 +146,50 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
     }
   }, [formData.so_tien, outstandingDebts.length, formData.loai]);
 
+  const { user } = useAuth();
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.nguoi_no) return;
-    // Chỉ yêu cầu số tiền > 0 nếu KHÔNG phải lệnh xóa sạch nợ
     if (!formData.isClearAll && formData.so_tien <= 0) return;
     
     setIsSaving(true);
     try {
-      const finalName = matchedUser ? matchedUser.name : formData.nguoi_no;
-      
-      if (isNewUser && shouldAddUser) {
-        await addUser(formData.nguoi_no);
-      }
+      if (user) {
+        // LOGGED IN: Save to backend
+        const backendData = {
+          debtor_name: formData.nguoi_no,
+          amount: formData.so_tien,
+          description: formData.noi_dung,
+          date: new Date(formData.ngay),
+          type: formData.loai === 'tra' ? 'borrow' : 'lend',
+          transcript: transcript || ''
+        };
 
-      // --- SMART WATERFALL / SELECTED DEBTS LOGIC ---
-      if (formData.loai === 'tra' && !isEdit) {
         if (formData.isClearAll) {
-          // XÓA SẠCH NỢ: Tìm và xóa TẤT CẢ bản ghi nợ của người này
-          await db.debts
-            .where('nguoi_no')
-            .equalsIgnoreCase(finalName)
-            .and(d => d.loai === 'no')
-            .delete();
+          // LOGGED IN: Call bulk archive endpoint
+          await api.delete(`/api/debts/debtor/${formData.nguoi_no}`);
         } else {
-          // Xử lý nợ theo danh sách chọn hoặc tự động (Waterfall)
-          let remainingRepayment = formData.so_tien;
-          
-          // 1. Nếu có nợ được chọn, ưu tiên trừ nợ đó trước
-          if (selectedDebtIds.length > 0) {
-            const selectedDebts = outstandingDebts.filter(d => d.id && selectedDebtIds.includes(d.id));
-            for (const debt of selectedDebts) {
-              if (remainingRepayment <= 0) break;
-              if (remainingRepayment >= debt.so_tien) {
-                remainingRepayment -= debt.so_tien;
-                await db.debts.delete(debt.id!);
-              } else {
-                await db.debts.update(debt.id!, { so_tien: debt.so_tien - remainingRepayment });
-                remainingRepayment = 0;
-              }
-            }
-          }
-
-          // 2. Nếu vẫn còn tiền nợ sau khi trừ nợ chọn (hoặc không chọn gì), thực hiện Waterfall nợ cũ
-          if (remainingRepayment > 0) {
-            const userDebts = await db.debts
-              .where('nguoi_no')
-              .equalsIgnoreCase(finalName)
-              .and(d => d.loai === 'no')
-              .toArray();
-
-            for (const debt of userDebts) {
-              // Bỏ qua nợ đã xử lý ở bước 1 (nếu có)
-              if (selectedDebtIds.includes(debt.id!)) continue;
-              if (remainingRepayment <= 0) break;
-
-              if (remainingRepayment >= debt.so_tien) {
-                remainingRepayment -= debt.so_tien;
-                await db.debts.delete(debt.id!);
-              } else {
-                await db.debts.update(debt.id!, { so_tien: debt.so_tien - remainingRepayment });
-                remainingRepayment = 0;
-              }
-            }
-          }
-
-          if (remainingRepayment > 0) {
-            await addDebt({ ...formData, so_tien: remainingRepayment, nguoi_no: finalName } as Omit<IDebt, 'id'>);
-          }
+          await api.post('/api/debts', backendData);
         }
       } else {
-        // --- NORMAL SAVE / UPDATE LOGIC ---
-        if (parsedData?.id) {
-          await db.debts.update(parsedData.id, { ...formData, nguoi_no: finalName });
+        // NOT LOGGED IN: Save to local Dexie
+        const localData = {
+          nguoi_no: formData.nguoi_no,
+          so_tien: formData.so_tien,
+          noi_dung: formData.isClearAll ? 'XÓA SẠCH NỢ' : formData.noi_dung,
+          ngay: formData.ngay,
+          loai: formData.loai as 'no' | 'tra'
+        };
+
+        if (formData.isClearAll) {
+          // Archive all for this user locally
+          await bulkMoveToTrash(formData.nguoi_no);
         } else {
-          await addDebt({ ...formData, nguoi_no: finalName } as Omit<IDebt, 'id'>);
+          await addDebt(localData);
+          if (shouldAddUser) {
+            await addUser(formData.nguoi_no);
+          }
         }
       }
 
@@ -239,6 +210,7 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
       }, 1000);
     } catch (error) {
       console.error("Error saving debt:", error);
+      alert(user ? "Lỗi khi lưu dữ liệu lên server. Vui lòng thử lại." : "Lỗi khi lưu dữ liệu cục bộ.");
     } finally {
       setIsSaving(false);
     }

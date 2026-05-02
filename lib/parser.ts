@@ -9,7 +9,7 @@ export function parseSpeechToDebt(text: string): ParsedDebtResult {
   const normalized = text.toLowerCase().trim();
   
   // 1. Tìm Từ khóa Hành động (Mốc phân tách Tên và Tiền/Ý định)
-  const actionKeywords = [' nợ ', ' trả ', ' mượn ', ' vay ', ' cho nợ ', ' nợ thêm ', ' thanh toán ', ' hết nợ', ' xóa nợ'];
+  const actionKeywords = [' nợ ', ' trả ', ' mượn ', ' vay ', ' cho nợ ', ' nợ thêm ', ' thanh toán ', 'hết nợ', 'xóa nợ'];
   let actionIdx = -1;
   let actionWord = "";
 

@@ -4,18 +4,23 @@ import { IDebt, IUser } from '@/types/debt';
 const db = new Dexie('VoiceDebtTrackerDB') as Dexie & {
   debts: EntityTable<
     IDebt,
-    'id' // primary key "id" (for the typings only)
+    'id'
   >;
   users: EntityTable<
     IUser,
     'id'
   >;
+  deletedDebts: EntityTable<
+    IDebt & { deleted_at: string },
+    'id'
+  >;
 };
 
 // Schema declaration
-db.version(2).stores({
+db.version(3).stores({
   debts: '++id, nguoi_no, so_tien, ngay, loai',
-  users: '++id, &name'
+  users: '++id, &name',
+  deletedDebts: '++id, nguoi_no, so_tien, ngay, loai, deleted_at'
 });
 
 export type { IDebt, IUser };
@@ -31,7 +36,40 @@ export async function updateDebt(id: number, data: Partial<IDebt>) {
 }
 
 export async function deleteDebt(id: number) {
-  return await db.debts.delete(id);
+  return await moveToTrash(id);
+}
+
+export async function moveToTrash(id: number) {
+  const debt = await db.debts.get(id);
+  if (debt) {
+    await db.deletedDebts.add({
+      ...debt,
+      deleted_at: new Date().toISOString()
+    });
+    return await db.debts.delete(id);
+  }
+}
+
+export async function bulkMoveToTrash(userName: string) {
+  const debts = await db.debts.where('nguoi_no').equalsIgnoreCase(userName).toArray();
+  for (const debt of debts) {
+    if (debt.id) {
+      await db.deletedDebts.add({
+        ...debt,
+        deleted_at: new Date().toISOString()
+      });
+    }
+  }
+  return await db.debts.where('nguoi_no').equalsIgnoreCase(userName).delete();
+}
+
+export async function restoreFromTrash(id: number) {
+  const deleted = await db.deletedDebts.get(id);
+  if (deleted) {
+    const { deleted_at, ...debtData } = deleted;
+    await db.debts.add(debtData as IDebt);
+    return await db.deletedDebts.delete(id);
+  }
 }
 
 export async function getAllDebts() {
@@ -54,10 +92,13 @@ export async function deleteUser(id: number) {
   // 1. Tìm tên của user trước khi xóa
   const user = await db.users.get(id);
   if (user) {
-    // 2. Cascade Delete: Xóa toàn bộ nợ liên quan đến người này
-    await db.debts.where('nguoi_no').equalsIgnoreCase(user.name).delete();
+    // 2. Archive all debts related to this person
+    const userDebts = await db.debts.where('nguoi_no').equalsIgnoreCase(user.name).toArray();
+    for (const d of userDebts) {
+      if (d.id) await moveToTrash(d.id);
+    }
   }
-  // 3. Xóa user
+  // 3. Xóa user (users table is small and metadata, we can permanently delete users or move to private archive)
   return await db.users.delete(id);
 }
 

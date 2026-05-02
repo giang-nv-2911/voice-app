@@ -4,9 +4,15 @@ import { Edit2, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { deleteDebt, db } from '@/lib/db';
 import DebtForm from './DebtForm';
+import { useAuth } from '@/hooks/useAuth';
+import api from '@/lib/api';
+import ConfirmModal from './ConfirmModal';
 
 export default function DebtList({ debts }: { debts: IDebt[] }) {
+  const { user } = useAuth();
   const [editingDebt, setEditingDebt] = useState<IDebt | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [idToDelete, setIdToDelete] = useState<number | null>(null);
 
   if (debts.length === 0) {
     return (
@@ -16,10 +22,24 @@ export default function DebtList({ debts }: { debts: IDebt[] }) {
     );
   }
 
-  const handleDelete = async (id: number) => {
-    if (confirm("Bạn có chắc muốn xóa bản ghi này?")) {
-      await deleteDebt(id);
+  const handleConfirmDelete = async () => {
+    if (idToDelete) {
+      try {
+        if (user) {
+          await api.delete(`/api/debts/${idToDelete}`);
+        } else {
+          await deleteDebt(idToDelete);
+        }
+        window.location.reload(); 
+      } catch (error) {
+        console.error("Delete failed:", error);
+      }
     }
+  };
+
+  const handleDeleteClick = (id: number) => {
+    setIdToDelete(id);
+    setModalOpen(true);
   };
 
   return (
@@ -57,7 +77,7 @@ export default function DebtList({ debts }: { debts: IDebt[] }) {
                     <Edit2 size={16} />
                   </button>
                   <button 
-                    onClick={() => debt.id && handleDelete(debt.id)}
+                    onClick={() => debt.id && handleDeleteClick(debt.id)}
                     className="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-rose-500 hover:text-white transition-all shadow-sm"
                   >
                     <Trash2 size={16} />
@@ -86,6 +106,16 @@ export default function DebtList({ debts }: { debts: IDebt[] }) {
           </div>
         </div>
       )}
+      <ConfirmModal 
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Chuyển vào thùng rác?"
+        message="Bản ghi này sẽ được lưu trữ trong thùng rác và có thể khôi phục sau này."
+        confirmText="Đồng ý xóa"
+        cancelText="Quay lại"
+        type="danger"
+      />
     </>
   );
 }
