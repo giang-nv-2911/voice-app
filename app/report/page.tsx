@@ -24,7 +24,7 @@ export default function ReportPage() {
   const [deletedDebts, setDeletedDebts] = useState<IDebt[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  
+
   useEffect(() => {
     async function fetchData() {
       setIsLoading(true);
@@ -35,7 +35,7 @@ export default function ReportPage() {
             api.get('/api/debts'),
             api.get('/api/debts/trash')
           ]);
-          
+
           const mapDebt = (d: any) => ({
             id: d.id,
             nguoi_no: d.debtor_name,
@@ -93,7 +93,7 @@ export default function ReportPage() {
       const matchProduct = filters.product === '' || d.noi_dung.toLowerCase().includes(filters.product.toLowerCase());
       const matchFromDate = filters.fromDate === '' || d.ngay >= filters.fromDate;
       const matchToDate = filters.toDate === '' || d.ngay <= filters.toDate;
-      
+
       return matchPerson && matchProduct && matchFromDate && matchToDate;
     }).sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
   }, [rawDebts, filters]);
@@ -108,8 +108,8 @@ export default function ReportPage() {
   return (
     <main className="flex min-h-screen flex-col items-center p-4 sm:p-12 pb-32">
       <div className="w-full max-w-lg mb-8 mt-2 flex items-center justify-between">
-        <Link 
-          href="/" 
+        <Link
+          href="/"
           className="p-3 bg-white dark:bg-slate-900 rounded-full shadow-lg text-slate-700 dark:text-slate-300 hover:scale-105 active:scale-95 transition-all border border-slate-100 dark:border-slate-800"
         >
           <ChevronLeft size={24} />
@@ -128,7 +128,7 @@ export default function ReportPage() {
             )}
           </div>
         </div>
-        <button 
+        <button
           onClick={handleClearClick}
           className="p-3 bg-white dark:bg-slate-900 rounded-full shadow-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 active:scale-95 transition-all border border-slate-100 dark:border-slate-800"
           title="Xóa toàn bộ dữ liệu"
@@ -138,15 +138,15 @@ export default function ReportPage() {
       </div>
 
       <div className="w-full max-w-lg space-y-6">
-        <FilterBar 
-          filters={filters} 
-          onChange={setFilters} 
-          onReset={() => setFilters({ person: '', product: '', fromDate: '', toDate: '' })} 
+        <FilterBar
+          filters={filters}
+          onChange={setFilters}
+          onReset={() => setFilters({ person: '', product: '', fromDate: '', toDate: '' })}
         />
-        
-        <div className="sticky top-6 z-30 flex gap-1 p-1 bg-white/40 dark:bg-slate-900/40 backdrop-blur-2xl border border-white/20 dark:border-white/5 rounded-[2rem] shadow-2xl shadow-indigo-500/10 overflow-x-auto no-scrollbar">
+
+        <div className="sticky top-6 z-30 flex gap-1 p-1 bg-white/40 dark:bg-slate-900/40 backdrop-blur-2xl border border-white/20 dark:border-white/5 rounded-[1rem] shadow-2xl shadow-indigo-500/10 overflow-x-auto no-scrollbar">
           {tabs.map(tab => (
-            <button 
+            <button
               key={tab.id}
               onClick={() => setActiveView(tab.id)}
               className={`
@@ -155,7 +155,7 @@ export default function ReportPage() {
               `}
             >
               {activeView === tab.id && (
-                <motion.div 
+                <motion.div
                   layoutId="activeViewBg"
                   className="absolute inset-0 bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700/50 rounded-2xl"
                   transition={{ type: "spring", bounce: 0.15, duration: 0.5 }}
@@ -175,8 +175,8 @@ export default function ReportPage() {
         <div className="mt-8">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-20 animate-in fade-in duration-500">
-               <Loader2 className="w-10 h-10 text-indigo-500 animate-spin mb-4" />
-               <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">Đang tải dữ liệu...</p>
+              <Loader2 className="w-10 h-10 text-indigo-500 animate-spin mb-4" />
+              <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">Đang tải dữ liệu...</p>
             </div>
           ) : (
             <AnimatePresence mode="wait">
@@ -197,7 +197,7 @@ export default function ReportPage() {
         </div>
       </div>
 
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         onConfirm={handleConfirmClear}

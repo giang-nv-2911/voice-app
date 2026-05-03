@@ -68,7 +68,7 @@ export default function FilterBar({ filters, onChange, onReset }: FilterBarProps
             initial={{ opacity: 0, y: -10, scale: 0.95 }}
             animate={{ opacity: 1, y: 8, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            className="absolute top-full left-0 right-0 z-30 p-6 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200/50 dark:border-slate-800/80 shadow-2xl space-y-6"
+            className="absolute top-full left-0 right-0 z-50 p-6 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200/50 dark:border-slate-800/80 shadow-2xl space-y-6"
           >
             <div className="flex items-center justify-between px-2">
               <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-widest">Tùy chỉnh lọc</h4>
@@ -84,14 +84,14 @@ export default function FilterBar({ filters, onChange, onReset }: FilterBarProps
             <div className="space-y-5">
               {/* Product Filter */}
               <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-tighter px-2">Nội dung nợ</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Nội dung nợ</label>
                 <div className="relative flex items-center bg-slate-50 dark:bg-slate-950/50 rounded-2xl border border-slate-100 dark:border-slate-800/50 py-1 px-4">
                   <Search size={16} className="text-slate-400" />
                   <input 
                     name="product"
                     value={filters.product}
                     onChange={handleChange}
-                    placeholder="VD: ăn nhậu, cafe, vay tiền..."
+                    placeholder="Vay tiền, cafe..."
                     className="flex-1 px-3 py-2.5 bg-transparent outline-none text-sm font-medium dark:text-white placeholder:text-slate-500"
                   />
                 </div>
@@ -99,40 +99,34 @@ export default function FilterBar({ filters, onChange, onReset }: FilterBarProps
 
               {/* Date Range Picker Style */}
               <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-tighter px-2">Khoảng thời gian</label>
-                <div className="grid grid-cols-[1fr_auto_1fr] items-center bg-slate-50 dark:bg-slate-950/50 rounded-2xl border border-slate-100 dark:border-slate-800/50 p-1">
-                  <div className="relative">
-                    <input 
-                      type="date"
-                      name="fromDate"
-                      value={filters.fromDate}
-                      onChange={handleChange}
-                      className="w-full px-4 py-3 bg-transparent outline-none text-xs font-bold dark:text-white dark:scheme-dark cursor-pointer"
-                    />
-                    {!filters.fromDate && (
-                      <div className="absolute inset-0 flex items-center px-4 pointer-events-none text-slate-400 text-xs font-bold">
-                        <Calendar size={14} className="mr-2" /> Từ ngày
-                      </div>
-                    )}
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Khoảng thời gian</label>
+                <div className="grid grid-cols-2 gap-3 items-center">
+                  <div className="space-y-1.5">
+                    <span className="block text-[9px] font-bold text-slate-500 uppercase ml-2">Từ ngày</span>
+                    <div className="relative flex items-center bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-100 dark:border-slate-800/50 px-3">
+                      <Calendar size={14} className="text-slate-400 mr-1" />
+                      <input 
+                        type="date"
+                        name="fromDate"
+                        value={filters.fromDate}
+                        onChange={handleChange}
+                        className="w-full py-2.5 bg-transparent outline-none text-xs font-bold dark:text-white dark:scheme-dark cursor-pointer"
+                      />
+                    </div>
                   </div>
                   
-                  <div className="p-2 text-slate-300">
-                    <ChevronRight size={18} />
-                  </div>
-
-                  <div className="relative">
-                    <input 
-                      type="date"
-                      name="toDate"
-                      value={filters.toDate}
-                      onChange={handleChange}
-                      className="w-full px-4 py-3 bg-transparent outline-none text-xs font-bold dark:text-white dark:scheme-dark cursor-pointer text-right"
-                    />
-                    {!filters.toDate && (
-                      <div className="absolute inset-0 flex items-center justify-end px-4 pointer-events-none text-slate-400 text-xs font-bold">
-                        Đến ngày <Calendar size={14} className="ml-2" />
-                      </div>
-                    )}
+                  <div className="space-y-1.5">
+                    <span className="block text-[9px] font-bold text-slate-500 uppercase ml-2">Đến ngày</span>
+                    <div className="relative flex items-center bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-100 dark:border-slate-800/50 px-3">
+                      <Calendar size={14} className="text-slate-400 mr-1" />
+                      <input 
+                        type="date"
+                        name="toDate"
+                        value={filters.toDate}
+                        onChange={handleChange}
+                        className="w-full py-2.5 bg-transparent outline-none text-xs font-bold dark:text-white dark:scheme-dark cursor-pointer"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
