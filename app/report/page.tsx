@@ -98,12 +98,19 @@ export default function ReportPage() {
     }).sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
   }, [rawDebts, filters]);
 
-  const tabs: { id: ViewMode; label: string; icon: React.ElementType }[] = [
-    { id: 'summary', label: 'Thống kê', icon: BarChart3 },
-    { id: 'users', label: 'Người nợ', icon: Users },
-    { id: 'list', label: 'Lịch sử', icon: ReceiptText },
-    { id: 'trash', label: 'Thùng rác', icon: Trash2 },
+  const tabs = [
+    { id: 'summary' as const, label: 'Thống kê', icon: BarChart3 },
+    { id: 'users' as const, label: 'Người nợ', icon: Users },
+    { id: 'list' as const, label: 'Lịch sử', icon: ReceiptText },
+    ...(user ? [{ id: 'trash' as const, label: 'Thùng rác', icon: Trash2 }] : []),
   ];
+
+  // Safety: If user is not logged in but somehow on trash tab (e.g. after logout)
+  useEffect(() => {
+    if (!user && activeView === 'trash') {
+      setActiveView('summary');
+    }
+  }, [user, activeView]);
 
   return (
     <main className="flex min-h-screen flex-col items-center p-4 sm:p-12 pb-32">

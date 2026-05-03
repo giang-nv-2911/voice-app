@@ -8,7 +8,7 @@ import { ParsedDebtResult } from "@/types/debt";
 import Link from "next/link";
 import { ReceiptText, LogOut, Cloud, HardDrive, HelpCircle, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-
+import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 
 export default function Home() {
@@ -16,6 +16,7 @@ export default function Home() {
   const [parsedData, setParsedData] = useState<ParsedDebtResult | null>(null);
   const [lastTranscript, setLastTranscript] = useState<string>("");
   const [showGuide, setShowGuide] = useState(true);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   // Initialize guide state from localStorage
   useEffect(() => {
@@ -91,21 +92,53 @@ export default function Home() {
 
           {/* Auth Action - Prominent & Final */}
           {user ? (
-            <div className="flex items-center gap-2 pl-2 border-l border-slate-100 dark:border-slate-800 flex-shrink-0">
-              <Image
-                src={user.picture}
-                alt={user.name}
-                width={36}
-                height={36}
-                className="rounded-full border-2 border-indigo-100 dark:border-indigo-900 shadow-sm"
-              />
+            <div className="relative pl-1 flex-shrink-0">
               <button
-                onClick={() => logout()}
-                className="w-[42px] h-[42px] flex items-center justify-center text-slate-400 hover:text-rose-500 transition-colors"
-                title="Đăng xuất"
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="relative group transition-all"
               >
-                <LogOut size={20} />
+                <div className="absolute inset-0 bg-indigo-500 rounded-full blur-md opacity-0 group-hover:opacity-20 transition-opacity" />
+                <Image
+                  src={user.picture}
+                  alt={user.name}
+                  width={42}
+                  height={42}
+                  className="relative rounded-full border-2 border-white dark:border-slate-800 shadow-md transform group-active:scale-95 transition-transform"
+                />
               </button>
+
+              <AnimatePresence>
+                {showUserMenu && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setShowUserMenu(false)} 
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 8, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="absolute right-0 top-full z-50 w-48 py-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-800/50 shadow-2xl"
+                    >
+                      <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800/50">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tài khoản</p>
+                        <p className="text-xs font-bold text-slate-800 dark:text-white truncate">{user.name}</p>
+                      </div>
+                      
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          logout();
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors text-sm font-bold"
+                      >
+                        <LogOut size={16} />
+                        Đăng xuất
+                      </button>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
             </div>
           ) : (
             <a
