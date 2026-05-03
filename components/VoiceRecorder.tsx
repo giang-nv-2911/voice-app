@@ -9,13 +9,13 @@ interface VoiceRecorderProps {
 }
 
 export default function VoiceRecorder({ onResult }: VoiceRecorderProps) {
-  const { 
-    isRecording, 
-    transcript, 
-    interimTranscript, 
-    error, 
-    startRecording, 
-    stopRecording, 
+  const {
+    isRecording,
+    transcript,
+    interimTranscript,
+    error,
+    startRecording,
+    stopRecording,
     isSupported,
     hasChecked
   } = useSpeechRecognition();
@@ -56,8 +56,8 @@ export default function VoiceRecorder({ onResult }: VoiceRecorderProps) {
           className={`
             relative z-10 w-24 h-24 rounded-full flex items-center justify-center 
             transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] shadow-xl
-            ${isRecording 
-              ? 'bg-rose-500 hover:bg-rose-600 scale-95 shadow-rose-500/30' 
+            ${isRecording
+              ? 'bg-rose-500 hover:bg-rose-600 scale-95 shadow-rose-500/30'
               : 'bg-indigo-600 hover:bg-indigo-700 hover:scale-105 shadow-indigo-600/30'}
           `}
         >
