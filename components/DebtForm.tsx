@@ -17,6 +17,7 @@ interface DebtFormProps {
 }
 
 export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: DebtFormProps) {
+  const { user } = useAuth();
   const [formData, setFormData] = useState<ParsedDebtResult>({
     nguoi_no: '',
     so_tien: 0,
@@ -24,141 +25,88 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
     ngay: new Date().toISOString().split('T')[0],
     loai: 'no'
   });
-  
+
   const [isSaving, setIsSaving] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [personBalance, setPersonBalance] = useState<number | null>(null);
   const [shouldAddUser, setShouldAddUser] = useState(false);
-  
-  // New state for selectable debts
-  const [outstandingDebts, setOutstandingDebts] = useState<IDebt[]>([]);
-  const [selectedDebtIds, setSelectedDebtIds] = useState<number[]>([]);
+  const [remoteDebtors, setRemoteDebtors] = useState<string[]>([]);
+
 
   const rawUsers = useLiveQuery(() => db.users.toArray());
   const users = useMemo(() => rawUsers || [], [rawUsers]);
 
-  // Comparison logic
+  // LEDGER-BASED DETECTION: Also check existing debt records for names
+  const localHistoricalNames = useLiveQuery(async () => {
+    const historical = await db.debts.toArray();
+    return [...new Set(historical.map(d => d.nguoi_no))].filter(Boolean);
+  }, []);
+
+  // Sync remote debtors if logged in
+  useEffect(() => {
+    if (user) {
+      api.get('/api/debts').then(res => {
+        const names = [...new Set(res.data.map((d: { debtor_name: string }) => d.debtor_name))].filter(Boolean);
+        setRemoteDebtors(names as string[]);
+      }).catch(console.error);
+    }
+  }, [user]);
+
+  const allKnownNames = useMemo(() => {
+    const localUsers = users.map(u => u.name);
+    const historical = localHistoricalNames || [];
+    return [...new Set([...localUsers, ...historical, ...remoteDebtors])];
+  }, [users, localHistoricalNames, remoteDebtors]);
+
   const matchedUser = useMemo(() => {
-    if (!formData.nguoi_no) return null;
-    
-    const normalize = (str: string) => 
+    const input = formData.nguoi_no?.trim();
+    if (!input) return null;
+
+    const normalize = (str: string) =>
       str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
-    const inputName = normalize(formData.nguoi_no);
-    
-    // 1. Thử khớp chính xác trước
-    const exactMatch = users.find(u => u.name.toLowerCase() === formData.nguoi_no.toLowerCase());
-    if (exactMatch) return exactMatch;
+    const inputName = normalize(input);
 
-    // 2. Nếu không khớp chính xác, thử khớp không dấu (Smart Match)
-    return users.find(u => normalize(u.name) === inputName);
-  }, [formData.nguoi_no, users]);
+    // Check against ALL known names (both from user list and debt history)
+    const match = allKnownNames.find(name =>
+      name.trim().toLowerCase() === input.toLowerCase() ||
+      normalize(name.trim()) === inputName
+    );
 
-  const isNewUser = formData.nguoi_no && !matchedUser;
+    return match ? { name: match } : null;
+  }, [formData.nguoi_no, allKnownNames]);
+
+  const isNewUser = formData.nguoi_no?.trim() && !matchedUser;
+
+  // Reactively sync the "Add User" checkbox with the match result
+  useEffect(() => {
+    setShouldAddUser(!!isNewUser);
+  }, [isNewUser]);
 
   // Sync prop to state without trigger cascading render warning
   useEffect(() => {
     if (parsedData) {
       setFormData(prev => {
-        const isSame = prev.nguoi_no === parsedData.nguoi_no && 
-                       prev.so_tien === parsedData.so_tien && 
-                       prev.loai === parsedData.loai && 
-                       prev.isClearAll === parsedData.isClearAll;
+        const isSame = prev.nguoi_no === parsedData.nguoi_no &&
+          prev.so_tien === parsedData.so_tien &&
+          prev.loai === parsedData.loai &&
+          prev.isClearAll === parsedData.isClearAll;
         return isSame ? prev : parsedData;
       });
-      const exists = users.some(u => u.name.toLowerCase() === parsedData.nguoi_no.toLowerCase());
-      setShouldAddUser(!exists);
     }
-  }, [parsedData, users]);
+  }, [parsedData]);
 
-  // Check balance in real-time for UX feedback
-  useEffect(() => {
-    async function checkBalance() {
-      if (formData.nguoi_no) {
-        const debts = await db.debts
-          .where('nguoi_no')
-          .equalsIgnoreCase(formData.nguoi_no)
-          .and(d => d.loai === 'no')
-          .toArray();
-        const total = debts.reduce((sum, d) => sum + (d.so_tien || 0), 0);
-        setPersonBalance(total);
-      } else {
-        setPersonBalance(null);
-      }
-    }
-    checkBalance();
-  }, [formData.nguoi_no]);
-
-  // Effect to fetch outstanding debts when user is matched and it's a repayment
-  useEffect(() => {
-    const fetchDebts = async () => {
-      if (formData.loai === 'tra' && matchedUser) {
-        const debts = await db.debts
-          .where('nguoi_no')
-          .equalsIgnoreCase(matchedUser.name)
-          .and(d => d.loai === 'no')
-          .toArray();
-        setOutstandingDebts(debts);
-      } else {
-        setOutstandingDebts([]);
-        setSelectedDebtIds([]);
-      }
-    };
-    fetchDebts();
-  }, [matchedUser, formData.loai]);
-
-  // Smart Auto-Selection Logic (Refined for Strictness)
-  useEffect(() => {
-    if (formData.loai === 'tra' && formData.so_tien > 0 && outstandingDebts.length > 0) {
-      const currentSelectedTotal = outstandingDebts
-        .filter(d => selectedDebtIds.includes(d.id!))
-        .reduce((sum, d) => sum + d.so_tien, 0);
-
-      // Nếu đang chọn thiếu và không phải do người dùng chủ động xóa hết, hãy tự động điền thêm
-      if (currentSelectedTotal < formData.so_tien) {
-        // 1. Thử tìm một khoản nợ khớp chính xác số tiền (nếu chưa chọn gì)
-        if (selectedDebtIds.length === 0) {
-          const exactMatch = outstandingDebts.find(d => d.so_tien === formData.so_tien);
-          if (exactMatch) {
-            setSelectedDebtIds([exactMatch.id!]);
-            return;
-          }
-        }
-
-        // 2. Tự động tích thêm các mục (Waterfall style) cho đến khi gần đủ hoặc đủ
-        let newTotal = currentSelectedTotal;
-        const newSelected = [...selectedDebtIds];
-        let changed = false;
-
-        for (const debt of outstandingDebts) {
-          if (newTotal >= formData.so_tien) break;
-          if (!newSelected.includes(debt.id!)) {
-            newSelected.push(debt.id!);
-            newTotal += debt.so_tien;
-            changed = true;
-          }
-        }
-
-        if (changed) {
-          setSelectedDebtIds(newSelected);
-        }
-      }
-    }
-  }, [formData.so_tien, outstandingDebts.length, formData.loai]);
-
-  const { user } = useAuth();
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.nguoi_no) return;
+    const debtorName = formData.nguoi_no?.trim();
+    if (!debtorName) return;
     if (!formData.isClearAll && formData.so_tien <= 0) return;
-    
+
     setIsSaving(true);
     try {
       if (user) {
         // LOGGED IN: Save to backend
         const backendData = {
-          debtor_name: formData.nguoi_no,
+          debtor_name: debtorName,
           amount: formData.so_tien,
           description: formData.noi_dung,
           date: new Date(formData.ngay),
@@ -168,14 +116,23 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
 
         if (formData.isClearAll) {
           // LOGGED IN: Call bulk archive endpoint
-          await api.delete(`/api/debts/debtor/${formData.nguoi_no}`);
+          await api.delete(`/api/debts/debtor/${debtorName}`);
+        } else if (formData.loai === 'tra') {
+          // LOGGED IN: SIMPLE REPAYMENT (Ledger Model)
+          await api.post('/api/debts/repay', {
+            debtor_name: debtorName,
+            amount: formData.so_tien,
+            transcript: transcript || '',
+            date: formData.ngay,
+            description: formData.noi_dung
+          });
         } else {
           await api.post('/api/debts', backendData);
         }
       } else {
         // NOT LOGGED IN: Save to local Dexie
         const localData = {
-          nguoi_no: formData.nguoi_no,
+          nguoi_no: debtorName,
           so_tien: formData.so_tien,
           noi_dung: formData.isClearAll ? 'XÓA SẠCH NỢ' : formData.noi_dung,
           ngay: formData.ngay,
@@ -184,18 +141,16 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
 
         if (formData.isClearAll) {
           // Archive all for this user locally
-          await bulkMoveToTrash(formData.nguoi_no);
+          await bulkMoveToTrash(debtorName);
         } else {
-          await addDebt(localData);
+          await addDebt({ ...localData, status: 'pending' });
           if (shouldAddUser) {
-            await addUser(formData.nguoi_no);
+            await addUser(debtorName);
           }
         }
       }
 
-      setShowSuccess(true);
       setTimeout(() => {
-        setShowSuccess(false);
         if (!isEdit) {
           setFormData({
             nguoi_no: '',
@@ -231,28 +186,27 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
 
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-xl font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
-          {isEdit ? <Edit2 className="text-indigo-500 w-6 h-6"/> : <CheckCircle className="text-emerald-500 w-6 h-6"/>}
+          {isEdit ? <Edit2 className="text-indigo-500 w-6 h-6" /> : <CheckCircle className="text-emerald-500 w-6 h-6" />}
           {isEdit ? 'Chỉnh sửa bản ghi' : 'Xác nhận thông tin'}
         </h3>
-        
-        <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border-2 ${
-          formData.loai === 'tra' 
-            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600' 
+
+        <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border-2 ${formData.loai === 'tra'
+            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600'
             : 'bg-amber-500/10 border-amber-500/30 text-amber-600'
-        }`}>
-          {formData.loai === 'tra' ? 'Trả nợ' : 'Nợ mới'}
+          }`}>
+          {formData.loai === 'tra' ? 'Trả nợ' : (matchedUser ? 'Nợ cũ' : 'Nợ mới')}
         </div>
       </div>
-      
+
       <form onSubmit={handleSave} className="space-y-6">
         <div className="space-y-2">
           <div className="flex items-center gap-1.5 text-slate-400 font-bold text-[10px] uppercase tracking-widest ml-1">
             <UserPlus size={10} /> Người nợ
           </div>
           <div className="relative">
-            <input 
-              type="text" 
-              value={formData.nguoi_no} 
+            <input
+              type="text"
+              value={formData.nguoi_no}
               onChange={(e) => setFormData({ ...formData, nguoi_no: e.target.value })}
               required
               className={`
@@ -277,8 +231,8 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
               </div>
               <label className="flex items-center gap-2.5 cursor-pointer group">
                 <div className="relative flex items-center">
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     checked={shouldAddUser}
                     onChange={(e) => setShouldAddUser(e.target.checked)}
                     className="hidden peer"
@@ -292,7 +246,7 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
             </div>
           )}
         </div>
-        
+
         {!formData.isClearAll ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -301,8 +255,8 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
                   <CreditCard size={10} /> Số tiền
                 </div>
                 <div className="relative">
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={formData.so_tien === 0 ? '' : formData.so_tien}
                     onChange={(e) => setFormData({ ...formData, so_tien: Number(e.target.value) })}
                     required={!formData.isClearAll}
@@ -317,8 +271,8 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
                 <div className="flex items-center gap-1.5 text-slate-400 font-bold text-[10px] uppercase tracking-widest ml-1">
                   <Calendar size={10} /> Ngày tháng
                 </div>
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   value={formData.ngay}
                   onChange={(e) => setFormData({ ...formData, ngay: e.target.value })}
                   required
@@ -331,7 +285,7 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
               <div className="flex items-center gap-1.5 text-slate-400 font-bold text-[10px] uppercase tracking-widest ml-1">
                 <ReceiptText size={10} /> Nội dung nợ
               </div>
-              <input 
+              <input
                 value={formData.noi_dung}
                 onChange={(e) => setFormData({ ...formData, noi_dung: e.target.value })}
                 placeholder="Ví dụ: Tiền ăn sáng, cafe..."
@@ -348,154 +302,24 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
           </div>
         )}
 
-        {/* SELECTABLE DEBTS SECTION */}
-        <AnimatePresence>
-          {formData.loai === 'tra' && !formData.isClearAll && outstandingDebts.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="space-y-3 overflow-hidden"
-            >
-              <div className="flex items-center justify-between ml-1">
-                <div className="flex items-center gap-1.5 text-slate-400 font-bold text-[10px] uppercase tracking-widest">
-                  <ReceiptText size={10} /> Các khoản nợ chọn để trừ
-                </div>
-                <div className="flex gap-3">
-                  {selectedDebtIds.length > 0 && (
-                    <button 
-                      type="button"
-                      onClick={() => setSelectedDebtIds([])}
-                      className="text-[10px] font-black text-rose-500 uppercase hover:underline"
-                    >
-                      Bỏ chọn hết
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* ALLOCATION SUMMARY BAR */}
-              <div className={`p-3 rounded-xl border flex justify-between items-center text-[11px] font-bold transition-colors ${
-                (outstandingDebts.filter(d => selectedDebtIds.includes(d.id!)).reduce((sum, d) => sum + d.so_tien, 0) < formData.so_tien && selectedDebtIds.length < outstandingDebts.length)
-                  ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/50'
-                  : 'bg-slate-50 dark:bg-slate-950 border-slate-100 dark:border-slate-800'
-              }`}>
-                <div className="flex flex-col gap-0.5">
-                  <div className="text-slate-400 font-bold text-[9px] uppercase tracking-tighter">Đã chọn</div>
-                  <div className={(outstandingDebts.filter(d => selectedDebtIds.includes(d.id!)).reduce((sum, d) => sum + d.so_tien, 0) < formData.so_tien && selectedDebtIds.length < outstandingDebts.length) ? 'text-amber-600' : 'text-indigo-600 dark:text-indigo-400'}>
-                    {outstandingDebts
-                      .filter(d => selectedDebtIds.includes(d.id!))
-                      .reduce((sum, d) => sum + d.so_tien, 0)
-                      .toLocaleString()}đ
-                  </div>
-                </div>
-                <div className="h-4 w-[1px] bg-slate-200 dark:bg-slate-800"></div>
-                <div className="flex flex-col items-end gap-0.5">
-                  <div className="text-slate-400 font-bold text-[9px] uppercase tracking-tighter">Tổng trả</div>
-                  <div className="text-emerald-600">
-                    {formData.so_tien.toLocaleString()}đ
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1 scrollbar-hide">
-                {outstandingDebts.map((debt) => {
-                  const isSelected = selectedDebtIds.includes(debt.id!);
-                  const totalSelected = outstandingDebts
-                    .filter(d => selectedDebtIds.includes(d.id!))
-                    .reduce((sum, d) => sum + d.so_tien, 0);
-                  
-                  // UX LOGIC: Disable if not selected and total already covered
-                  const isDisabled = !isSelected && totalSelected >= formData.so_tien;
-
-                  return (
-                    <div
-                      key={debt.id}
-                      onClick={() => {
-                        if (isDisabled) return;
-                        setSelectedDebtIds(prev => 
-                          isSelected ? prev.filter(id => id !== debt.id) : [...prev, debt.id!]
-                        );
-                      }}
-                      className={`
-                        group relative p-3.5 rounded-2xl border-2 transition-all flex items-center justify-between
-                        ${isSelected 
-                          ? 'bg-indigo-50/50 border-indigo-500 shadow-sm' 
-                          : isDisabled
-                            ? 'bg-slate-50/50 border-transparent opacity-40 cursor-not-allowed'
-                            : 'bg-slate-50 dark:bg-slate-950 border-transparent hover:border-slate-200 dark:hover:border-slate-800 cursor-pointer'}
-                      `}
-                    >
-                      <div className="flex flex-col">
-                        <span className={`text-sm font-black transition-colors ${isSelected ? 'text-indigo-600' : 'text-slate-800 dark:text-slate-200'}`}>
-                          {debt.so_tien.toLocaleString()}đ
-                        </span>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">{debt.ngay}</span>
-                          <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 truncate max-w-[120px]">
-                            • {debt.noi_dung}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      <div className={`
-                        w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all
-                        ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'}
-                      `}>
-                        {isSelected && <CheckCircle size={14} className="text-white" strokeWidth={3} />}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {formData.loai === 'tra' && personBalance === 0 && !formData.isClearAll && (
-            <motion.div
-              initial={{ opacity: 0, height: 0, y: 10 }}
-              animate={{ opacity: 1, height: 'auto', y: 0 }}
-              exit={{ opacity: 0, height: 0, y: 10 }}
-              className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-2xl flex items-start gap-3 overflow-hidden"
-            >
-              <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={18} />
-              <div className="space-y-1">
-                <p className="text-sm font-bold text-amber-800 dark:text-amber-300">Không tìm thấy khoản nợ cũ</p>
-                <p className="text-xs text-amber-700/80 dark:text-amber-400/80 leading-relaxed">
-                  Người này hiện không có khoản nợ nào trong sổ. Ghi nhận <span className="font-bold">Trả nợ</span> lúc này sẽ tạo ra số dư trả trước.
-                </p>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        
         <button
           type="submit"
-          disabled={isSaving || (
-            formData.loai === 'tra' && 
-            !formData.isClearAll && 
-            outstandingDebts.length > 0 && 
-            (outstandingDebts.filter(d => selectedDebtIds.includes(d.id!)).reduce((sum, d) => sum + d.so_tien, 0) < formData.so_tien) &&
-            selectedDebtIds.length < outstandingDebts.length
-          )}
-          className={`w-full py-5 rounded-[1.75rem] font-black text-lg flex items-center justify-center gap-3 shadow-xl transition-all active:scale-95 disabled:opacity-30 disabled:grayscale-[0.5] ${
-            formData.isClearAll 
-              ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-200/50' 
-              : (formData.loai === 'tra' 
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200/50' 
+          disabled={isSaving}
+          className={`w-full py-5 rounded-[1.75rem] font-black text-lg flex items-center justify-center gap-3 shadow-xl transition-all active:scale-95 disabled:opacity-30 disabled:grayscale-[0.5] ${formData.isClearAll
+              ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-200/50'
+              : (formData.loai === 'tra'
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200/50'
                 : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200/50')
-          }`}
+            }`}
         >
           {isSaving ? (
             <Loader2 className="animate-spin" size={24} />
           ) : (
             <>
               <Save size={24} />
-              {isEdit 
-                ? 'Cập nhật thay đổi' 
-                : (formData.isClearAll ? 'Xác nhận xóa sạch nợ' : (formData.loai === 'tra' ? 'Xác nhận trả nợ' : 'Lưu sổ nợ'))}
+              {isEdit
+                ? 'Cập nhật thay đổi'
+                : (formData.isClearAll ? 'Xác nhận xóa sạch nợ' : (formData.loai === 'tra' ? 'Xác nhận trả nợ' : (matchedUser ? 'Ghi nợ thêm' : 'Lưu nợ mới')))}
             </>
           )}
         </button>

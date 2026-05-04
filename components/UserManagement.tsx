@@ -24,7 +24,8 @@ export default function UserManagement({ debts }: UserManagementProps) {
   // If remote, derive users from debts prop
   const remoteUsers: IUser[] = useMemo(() => {
     if (!isRemote || !debts) return [];
-    const uniqueNames = Array.from(new Set(debts.map(d => d.nguoi_no)));
+    // Safety check for null records and missing names
+    const uniqueNames = Array.from(new Set(debts.filter(d => d && d.nguoi_no).map(d => d.nguoi_no)));
     return uniqueNames.map((name, index) => ({
       id: index + 1, // Synthetic ID for UI
       name
@@ -140,7 +141,7 @@ export default function UserManagement({ debts }: UserManagementProps) {
           <UserHistory 
             user={selectedUser} 
             onBack={() => setSelectedUser(null)} 
-            debts={isRemote ? debts?.filter(d => d.nguoi_no === selectedUser.name) : undefined}
+            debts={isRemote ? debts?.filter(d => d && d.nguoi_no === selectedUser!.name) : undefined}
           />
         )}
       </AnimatePresence>

@@ -81,7 +81,11 @@ export async function getAllUsers() {
 }
 
 export async function addUser(name: string) {
-  return await db.users.add({ name });
+  // Use unique check before add to prevent ConstraintError
+  const trimmed = name.trim();
+  const existing = await db.users.where('name').equalsIgnoreCase(trimmed).first();
+  if (existing) return existing.id;
+  return await db.users.add({ name: trimmed });
 }
 
 export async function updateUser(id: number, name: string) {

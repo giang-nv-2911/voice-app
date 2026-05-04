@@ -5,6 +5,7 @@ export interface IDebt {
   noi_dung: string;
   ngay: string; // ISO date format YYYY-MM-DD
   loai: 'no' | 'tra'; // Phân loại: Nợ hoặc Trả
+  status?: 'pending' | 'paid';
 }
 
 export interface ParsedDebtResult {

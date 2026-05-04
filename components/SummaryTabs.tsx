@@ -3,16 +3,47 @@
 import { IDebt } from '@/types/debt';
 import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, Users, Package, Calendar } from 'lucide-react';
+import { TrendingUp, Users, Calendar } from 'lucide-react';
 
 export default function SummaryTabs({ debts }: { debts: IDebt[] }) {
-  const [activeTab, setActiveTab] = useState<'person' | 'product' | 'date'>('person');
+  const [activeTab, setActiveTab] = useState<'person' | 'date'>('person');
 
-  const totalAmount = useMemo(() => {
-    return debts.reduce((sum, d) => {
-      const value = d.so_tien || 0;
-      return d.loai === 'tra' ? sum - value : sum + value;
-    }, 0);
+  // Advanced Stats Calculation
+  const stats = useMemo(() => {
+    let lend = 0;
+    let borrow = 0;
+    const persons: Record<string, number> = {};
+
+    for (const d of debts) {
+      const val = d.so_tien || 0;
+      if (d.loai === 'tra') {
+        borrow += val;
+        if (d.nguoi_no) persons[d.nguoi_no] = (persons[d.nguoi_no] || 0) - val;
+      } else {
+        lend += val;
+        if (d.nguoi_no) persons[d.nguoi_no] = (persons[d.nguoi_no] || 0) + val;
+      }
+    }
+
+    const netBalance = lend - borrow;
+    const recoveryRate = lend > 0 ? Math.round((borrow / lend) * 100) : 0;
+    const activeDebtors = Object.entries(persons).filter(([personName, bal]) => bal > 0);
+    
+    // Find top debtor
+    let topDebtor = { name: 'Chưa có', amount: 0 };
+    if (activeDebtors.length > 0) {
+      const top = [...activeDebtors].sort((a, b) => b[1] - a[1])[0];
+      topDebtor = { name: top[0], amount: top[1] };
+    }
+
+    return { 
+      netBalance, 
+      lend, 
+      borrow, 
+      recoveryRate, 
+      debtorCount: activeDebtors.length,
+      topDebtor
+    };
   }, [debts]);
 
   const summaryData = useMemo(() => {
@@ -20,7 +51,6 @@ export default function SummaryTabs({ debts }: { debts: IDebt[] }) {
     for (const d of debts) {
       let key = '';
       if (activeTab === 'person') key = d.nguoi_no;
-      if (activeTab === 'product') key = d.noi_dung || 'Khác';
       if (activeTab === 'date') key = d.ngay;
       
       const value = d.so_tien || 0;
@@ -40,51 +70,78 @@ export default function SummaryTabs({ debts }: { debts: IDebt[] }) {
 
   const tabs = [
     { id: 'person', label: 'Người nợ', icon: Users },
-    { id: 'product', label: 'Nội dung', icon: Package },
     { id: 'date', label: 'Ngày', icon: Calendar },
   ];
 
   return (
     <div className="space-y-6">
+      {/* 🌟 ENHANCED STATS DASHBOARD */}
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="relative overflow-hidden bg-slate-900 dark:bg-black rounded-[2.5rem] p-8 text-white shadow-2xl border border-white/5"
       >
         <div className="relative z-10">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-indigo-500/20 rounded-lg">
-              <TrendingUp className="text-indigo-400 w-5 h-5" />
+          <div className="flex justify-between items-start mb-6">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-indigo-500/20 rounded-lg">
+                <TrendingUp className="text-indigo-400 w-5 h-5" />
+              </div>
+              <span className="text-indigo-300/80 font-black uppercase tracking-widest text-[9px]">Tổng quan tài chính</span>
             </div>
-            <span className="text-indigo-300/80 font-bold uppercase tracking-widest text-[10px]">Báo cáo tổng kết</span>
-          </div>
-          <p className="text-slate-400 font-medium mb-1">Tổng cộng nợ cần thu</p>
-          <div className="flex items-baseline gap-2">
-            <span className="text-5xl font-black tracking-tighter bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-              {totalAmount.toLocaleString('vi-VN')}
-            </span>
-            <span className="text-xl font-bold text-slate-500 lowercase">vnđ</span>
-          </div>
-          <div className="mt-8 flex gap-4">
-            <div className="px-4 py-2 bg-white/5 rounded-2xl border border-white/5 backdrop-blur-sm">
-              <p className="text-[10px] text-slate-500 font-bold uppercase">Bản ghi</p>
-              <p className="text-lg font-bold">{debts.length}</p>
+            <div className="flex flex-col items-end">
+              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Tỉ lệ thu hồi</span>
+              <span className="text-xl font-black text-emerald-400">{stats.recoveryRate}%</span>
             </div>
-            <div className="px-4 py-2 bg-white/5 rounded-2xl border border-white/5 backdrop-blur-sm">
-              <p className="text-[10px] text-slate-500 font-bold uppercase">Phát sinh</p>
-              <p className="text-lg font-bold text-emerald-400 text-sm">Hợp lệ</p>
+          </div>
+
+          <div className="space-y-1 mb-8">
+            <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Dư nợ hiện tại</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-5xl font-black tracking-tighter bg-gradient-to-r from-white via-white to-slate-500 bg-clip-text text-transparent">
+                {stats.netBalance.toLocaleString('vi-VN')}
+              </span>
+              <span className="text-xl font-bold text-slate-500 lowercase">vnđ</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 bg-white/5 rounded-2xl border border-white/5 backdrop-blur-sm space-y-1">
+              <p className="text-[9px] text-indigo-400 font-black uppercase tracking-widest">Cho nợ</p>
+              <p className="text-lg font-black">{stats.lend.toLocaleString('vi-VN')}đ</p>
+            </div>
+            <div className="p-4 bg-white/5 rounded-2xl border border-white/5 backdrop-blur-sm space-y-1">
+              <p className="text-[9px] text-emerald-400 font-black uppercase tracking-widest">Đã thu hồi</p>
+              <p className="text-lg font-black">{stats.borrow.toLocaleString('vi-VN')}đ</p>
+            </div>
+          </div>
+
+          <div className="mt-4 p-4 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-rose-500/20 flex items-center justify-center">
+                <Users className="text-rose-400" size={14} />
+              </div>
+              <div>
+                <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Người nợ nhất</p>
+                <p className="text-xs font-bold text-slate-200">{stats.topDebtor.name}</p>
+              </div>
+            </div>
+            <div className="text-right text-xs font-black text-rose-500">
+              {stats.topDebtor.amount.toLocaleString('vi-VN')}đ
             </div>
           </div>
         </div>
         
+        {/* Decorative elements */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-[100px] -mr-20 -mt-20" />
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-[60px] -ml-10 -mb-10" />
       </motion.div>
 
       <div className="flex p-1.5 bg-slate-100 dark:bg-slate-900 rounded-[1.5rem] border border-slate-200/50 dark:border-slate-800/50 shadow-inner overflow-x-auto no-scrollbar">
         {tabs.map(t => (
           <button 
             key={t.id}
-            onClick={() => setActiveTab(t.id as 'person' | 'product' | 'date')}
+            onClick={() => setActiveTab(t.id as 'person' | 'date')}
             className={`
               relative flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold transition-all duration-300
               ${activeTab === t.id ? 'text-indigo-600 dark:text-white' : 'text-slate-500 hover:text-slate-700'}
@@ -127,11 +184,11 @@ export default function SummaryTabs({ debts }: { debts: IDebt[] }) {
                   <div className="space-y-1">
                     <span className="font-bold text-slate-800 dark:text-slate-200 text-lg group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors uppercase tracking-tight">{key}</span>
                     <div className="text-[10px] font-bold text-slate-400 flex items-center gap-2">
-                       {Math.round((amount / totalAmount) * 100)}% GIA TRỊ NỢ
+                       {stats.netBalance > 0 ? Math.round((amount / stats.netBalance) * 100) : 0}% DƯ NỢ
                     </div>
                   </div>
                   <div className="flex flex-col items-end">
-                    <span className="font-black text-rose-500 dark:text-rose-400 text-xl tracking-tight">
+                    <span className={`font-black text-xl tracking-tight ${amount < 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                       {amount.toLocaleString('vi-VN')}
                     </span>
                     <span className="text-[10px] font-bold text-slate-400 uppercase">vnđ</span>
@@ -141,8 +198,8 @@ export default function SummaryTabs({ debts }: { debts: IDebt[] }) {
                 {/* Visual Bar Background */}
                 <div className="absolute inset-0 bg-slate-50 dark:bg-slate-800/50 opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div 
-                  className="absolute bottom-0 left-0 h-1 bg-indigo-500 transition-all duration-1000 ease-out" 
-                  style={{ width: `${(amount / totalAmount) * 100}%` }} 
+                  className={`absolute bottom-0 left-0 h-1 transition-all duration-1000 ease-out ${amount < 0 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                  style={{ width: `${Math.min(100, Math.abs((amount / (stats.netBalance || 1)) * 100))}%` }} 
                 />
               </motion.div>
             ))

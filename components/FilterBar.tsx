@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from 'react';
-import { Filter, X, Search, Calendar, ChevronRight } from 'lucide-react';
+import { Filter, X, Search, Calendar } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export interface FilterState {
   person: string;
-  product: string;
   fromDate: string;
   toDate: string;
 }
@@ -27,7 +26,7 @@ export default function FilterBar({ filters, onChange, onReset }: FilterBarProps
     });
   };
 
-  const hasFilters = filters.person !== '' || filters.product !== '' || filters.fromDate !== '' || filters.toDate !== '';
+  const hasFilters = filters.person !== '' || filters.fromDate !== '' || filters.toDate !== '';
 
   return (
     <div className="relative w-full max-w-lg mx-auto">
@@ -82,21 +81,6 @@ export default function FilterBar({ filters, onChange, onReset }: FilterBarProps
             </div>
 
             <div className="space-y-5">
-              {/* Product Filter */}
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Nội dung nợ</label>
-                <div className="relative flex items-center bg-slate-50 dark:bg-slate-950/50 rounded-2xl border border-slate-100 dark:border-slate-800/50 py-1 px-4">
-                  <Search size={16} className="text-slate-400" />
-                  <input 
-                    name="product"
-                    value={filters.product}
-                    onChange={handleChange}
-                    placeholder="Vay tiền, cafe..."
-                    className="flex-1 px-3 py-2.5 bg-transparent outline-none text-sm font-medium dark:text-white placeholder:text-slate-500"
-                  />
-                </div>
-              </div>
-
               {/* Date Range Picker Style */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Khoảng thời gian</label>

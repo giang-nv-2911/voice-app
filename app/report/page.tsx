@@ -36,19 +36,22 @@ export default function ReportPage() {
             api.get('/api/debts/trash')
           ]);
 
-          const mapDebt = (d: any) => ({
-            id: d.id,
-            nguoi_no: d.debtor_name,
-            so_tien: Number(d.amount),
-            noi_dung: d.description || '',
-            ngay: d.date.split('T')[0],
-            loai: d.type === 'borrow' ? 'tra' : 'no',
-            status: d.status,
-            deleted_at: d.deleted_at
-          });
+          const mapDebt = (d: any) => {
+            if (!d) return null;
+            return {
+              id: d.id,
+              nguoi_no: d.debtor_name || 'Không rõ',
+              so_tien: Number(d.amount) || 0,
+              noi_dung: d.description || '',
+              ngay: (d.date || new Date().toISOString()).split('T')[0],
+              loai: d.type === 'borrow' ? 'tra' : 'no',
+              status: d.status,
+              deleted_at: d.deleted_at
+            };
+          };
 
-          setRawDebts(debtsRes.data.map(mapDebt));
-          setDeletedDebts(trashRes.data.map(mapDebt));
+          setRawDebts(debtsRes.data.map(mapDebt).filter(Boolean));
+          setDeletedDebts(trashRes.data.map(mapDebt).filter(Boolean));
         } else {
           // NOT LOGGED IN: Fetch from local Dexie
           const [localDebts, localTrash] = await Promise.all([
@@ -82,7 +85,6 @@ export default function ReportPage() {
 
   const [filters, setFilters] = useState<FilterState>({
     person: '',
-    product: '',
     fromDate: '',
     toDate: ''
   });
@@ -90,12 +92,16 @@ export default function ReportPage() {
   const filteredDebts = useMemo(() => {
     return rawDebts.filter(d => {
       const matchPerson = filters.person === '' || d.nguoi_no.toLowerCase().includes(filters.person.toLowerCase());
-      const matchProduct = filters.product === '' || d.noi_dung.toLowerCase().includes(filters.product.toLowerCase());
       const matchFromDate = filters.fromDate === '' || d.ngay >= filters.fromDate;
       const matchToDate = filters.toDate === '' || d.ngay <= filters.toDate;
 
-      return matchPerson && matchProduct && matchFromDate && matchToDate;
-    }).sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
+      return matchPerson && matchFromDate && matchToDate;
+    }).sort((a, b) => {
+      const dateA = new Date(a.ngay).getTime();
+      const dateB = new Date(b.ngay).getTime();
+      if (dateB !== dateA) return dateB - dateA;
+      return (Number(b.id) || 0) - (Number(a.id) || 0);
+    });
   }, [rawDebts, filters]);
 
   const tabs = [
@@ -148,7 +154,7 @@ export default function ReportPage() {
         <FilterBar
           filters={filters}
           onChange={setFilters}
-          onReset={() => setFilters({ person: '', product: '', fromDate: '', toDate: '' })}
+          onReset={() => setFilters({ person: '', fromDate: '', toDate: '' })}
         />
 
         <div className="sticky top-6 z-30 flex gap-1 p-1 bg-white/40 dark:bg-slate-900/40 backdrop-blur-2xl border border-white/20 dark:border-white/5 rounded-[1rem] shadow-2xl shadow-indigo-500/10 overflow-x-auto no-scrollbar">
