@@ -66,7 +66,7 @@ export async function bulkMoveToTrash(userName: string) {
 export async function restoreFromTrash(id: number) {
   const deleted = await db.deletedDebts.get(id);
   if (deleted) {
-    const { deleted_at, ...debtData } = deleted;
+    const { deleted_at: _, ...debtData } = deleted;
     await db.debts.add(debtData as IDebt);
     return await db.deletedDebts.delete(id);
   }
@@ -115,8 +115,18 @@ export async function getDebtsByUser(userName: string) {
 }
 
 export async function clearAllData() {
+  const debts = await db.debts.toArray();
+  const trashEntries = debts.map(d => ({
+    ...d,
+    deleted_at: new Date().toISOString()
+  }));
+  
+  if (trashEntries.length > 0) {
+    await db.deletedDebts.bulkAdd(trashEntries as (IDebt & { deleted_at: string })[]);
+  }
+  
   await db.debts.clear();
-  await db.users.clear();
+  // We keep users table to preserve contact list
 }
 
 /**
@@ -160,4 +170,17 @@ export async function getSummaryByDate() {
     summary[db.ngay] += db.loai === 'tra' ? -value : value;
   }
   return summary;
+}
+
+export async function bulkRestoreFromTrash(ids: number[]) {
+  const deleted = await db.deletedDebts.where('id').anyOf(ids).toArray();
+  for (const item of deleted) {
+    const { deleted_at: _, ...debtData } = item;
+    await db.debts.add(debtData as IDebt);
+  }
+  return await db.deletedDebts.where('id').anyOf(ids).delete();
+}
+
+export async function bulkPermanentDeleteFromTrash(ids: number[]) {
+  return await db.deletedDebts.where('id').anyOf(ids).delete();
 }

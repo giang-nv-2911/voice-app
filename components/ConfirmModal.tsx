@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, X, Check, Trash2, RotateCcw } from 'lucide-react';
+import { AlertCircle, X, Check, Trash2, RotateCcw, Loader2 } from 'lucide-react';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -12,6 +12,7 @@ interface ConfirmModalProps {
   confirmText?: string;
   cancelText?: string;
   type?: 'danger' | 'warning' | 'info' | 'success';
+  isLoading?: boolean;
 }
 
 export default function ConfirmModal({
@@ -22,7 +23,8 @@ export default function ConfirmModal({
   message,
   confirmText = 'Xác nhận',
   cancelText = 'Hủy bỏ',
-  type = 'info'
+  type = 'info',
+  isLoading = false
 }: ConfirmModalProps) {
   
   const getTypeStyles = () => {
@@ -48,9 +50,10 @@ export default function ConfirmModal({
           border: 'border-emerald-100 dark:border-emerald-900/30',
           button: 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-200 dark:shadow-none'
         };
+      case 'info':
       default:
         return {
-          icon: <AlertCircle className="text-indigo-500" size={28} />,
+          icon: <RotateCcw className="text-indigo-500" size={28} />,
           bg: 'bg-indigo-50 dark:bg-indigo-950/20',
           border: 'border-indigo-100 dark:border-indigo-900/30',
           button: 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200 dark:shadow-none'
@@ -70,43 +73,38 @@ export default function ConfirmModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[99]"
           />
           
           {/* Modal Container */}
-          <div className="fixed inset-0 z-[101] flex items-center justify-center p-4 pointer-events-none">
+          <div className="fixed inset-0 flex items-center justify-center p-4 z-[100] pointer-events-none">
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl shadow-slate-900/20 border border-white dark:border-slate-800 overflow-hidden pointer-events-auto"
+              className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl border border-white dark:border-slate-800 overflow-hidden pointer-events-auto relative"
             >
-              <div className="p-8">
-                {/* Header with Icon */}
-                <div className="flex flex-col items-center text-center space-y-4">
-                  <div className={`w-16 h-16 rounded-3xl ${styles.bg} border ${styles.border} flex items-center justify-center shadow-inner`}>
-                    {styles.icon}
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight leading-tight">
-                      {title}
-                    </h3>
-                    <p className="text-slate-500 dark:text-slate-400 font-medium text-sm leading-relaxed px-2">
-                      {message}
-                    </p>
-                  </div>
+              <div className="p-8 text-center">
+                {/* Icon Container */}
+                <div className={`w-20 h-20 mx-auto rounded-[2rem] ${styles.bg} ${styles.border} border-2 flex items-center justify-center mb-6`}>
+                  {styles.icon}
                 </div>
-
-                {/* Actions */}
-                <div className="mt-8 flex flex-col gap-3">
+                
+                <h3 className="text-2xl font-black text-slate-800 dark:text-white mb-3 tracking-tight">
+                  {title}
+                </h3>
+                
+                <p className="text-slate-500 dark:text-slate-400 font-medium leading-relaxed mb-8 px-4">
+                  {message}
+                </p>
+                
+                <div className="flex flex-col sm:flex-row gap-3 w-full">
                   <button
-                    onClick={() => {
-                      onConfirm();
-                      onClose();
-                    }}
-                    className={`w-full py-4 rounded-2xl text-white font-black uppercase tracking-widest text-xs transition-all active:scale-95 shadow-lg ${styles.button}`}
+                    onClick={onConfirm}
+                    disabled={isLoading}
+                    className={`w-full py-4 rounded-2xl text-white font-black uppercase tracking-widest text-xs transition-all active:scale-95 shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 ${styles.button}`}
                   >
+                    {isLoading && <Loader2 className="animate-spin" size={16} />}
                     {confirmText}
                   </button>
                   <button
@@ -122,6 +120,7 @@ export default function ConfirmModal({
               <button 
                 onClick={onClose}
                 className="absolute top-6 right-6 p-2 text-slate-300 hover:text-slate-500 transition-colors"
+                title="Hủy bỏ"
               >
                 <X size={20} />
               </button>

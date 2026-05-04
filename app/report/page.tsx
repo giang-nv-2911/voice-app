@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, BarChart3, Users, ReceiptText, Trash2, Loader2, Cloud, HardDrive } from 'lucide-react';
@@ -25,57 +25,68 @@ export default function ReportPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
 
-  useEffect(() => {
-    async function fetchData() {
-      setIsLoading(true);
-      try {
-        if (user) {
-          // LOGGED IN: Fetch from backend
-          const [debtsRes, trashRes] = await Promise.all([
-            api.get('/api/debts'),
-            api.get('/api/debts/trash')
-          ]);
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      if (user) {
+        // LOGGED IN: Fetch from backend
+        const [debtsRes, trashRes] = await Promise.all([
+          api.get('/api/debts'),
+          api.get('/api/debts/trash')
+        ]);
 
-          const mapDebt = (d: any) => {
-            if (!d) return null;
-            return {
-              id: d.id,
-              nguoi_no: d.debtor_name || 'Không rõ',
-              so_tien: Number(d.amount) || 0,
-              noi_dung: d.description || '',
-              ngay: (d.date || new Date().toISOString()).split('T')[0],
-              loai: d.type === 'borrow' ? 'tra' : 'no',
-              status: d.status,
-              deleted_at: d.deleted_at
-            };
+        const mapDebt = (d: { id: number; debtor_name?: string; amount?: number; description?: string; date?: string; type?: string; status?: string; deleted_at?: string }) => {
+          if (!d) return null;
+          return {
+            id: d.id,
+            nguoi_no: d.debtor_name || 'Không rõ',
+            so_tien: Number(d.amount) || 0,
+            noi_dung: d.description || '',
+            ngay: (d.date || new Date().toISOString()).split('T')[0],
+            loai: d.type === 'borrow' ? 'tra' : 'no',
+            status: d.status,
+            deleted_at: d.deleted_at
           };
+        };
 
-          setRawDebts(debtsRes.data.map(mapDebt).filter(Boolean));
-          setDeletedDebts(trashRes.data.map(mapDebt).filter(Boolean));
-        } else {
-          // NOT LOGGED IN: Fetch from local Dexie
-          const [localDebts, localTrash] = await Promise.all([
-            db.debts.toArray(),
-            db.deletedDebts.toArray()
-          ]);
-          setRawDebts(localDebts || []);
-          setDeletedDebts(localTrash || []);
-        }
-      } catch (error) {
-        console.error("Failed to fetch data:", error);
-      } finally {
-        setIsLoading(false);
+        setRawDebts(debtsRes.data.map(mapDebt).filter(Boolean));
+        setDeletedDebts(trashRes.data.map(mapDebt).filter(Boolean));
+      } else {
+        // NOT LOGGED IN: Fetch from local Dexie
+        const [localDebts, localTrash] = await Promise.all([
+          db.debts.toArray(),
+          db.deletedDebts.toArray()
+        ]);
+        setRawDebts(localDebts || []);
+        setDeletedDebts(localTrash || []);
       }
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
+    } finally {
+      setIsLoading(false);
     }
-    fetchData();
   }, [user]);
 
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
   const handleConfirmClear = async () => {
-    if (user) {
-      alert("Tính năng xóa sạch trên server đang được phát triển.");
-    } else {
+    try {
+      if (user) {
+        // Online: Clear server data
+        await api.delete('/api/debts/purge');
+      }
+      
+      // Always clear local data
       await clearAllData();
-      setRawDebts([]);
+      
+      // Update UI state
+      await fetchData();
+      setModalOpen(false);
+    } catch (error) {
+      console.error("Purge failed:", error);
+      alert("Xóa dữ liệu thất bại. Vui lòng thử lại.");
     }
   };
 
@@ -203,7 +214,7 @@ export default function ReportPage() {
                 {activeView === 'summary' && <SummaryTabs debts={filteredDebts} />}
                 {activeView === 'users' && <UserManagement debts={rawDebts} />}
                 {activeView === 'list' && <DebtList debts={filteredDebts} />}
-                {activeView === 'trash' && <TrashList debts={deletedDebts} />}
+                {activeView === 'trash' && <TrashList debts={deletedDebts} onRefresh={fetchData} />}
               </motion.div>
             </AnimatePresence>
           )}
