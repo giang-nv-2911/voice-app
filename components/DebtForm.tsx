@@ -261,9 +261,9 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
                     onChange={(e) => setFormData({ ...formData, so_tien: Number(e.target.value) })}
                     required={!formData.isClearAll}
                     placeholder="0"
-                    className="w-full p-4 pl-12 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-900 outline-none rounded-2xl font-black text-2xl text-slate-800 dark:text-white transition-all shadow-inner"
+                    className="w-full h-[72px] pl-12 pr-4 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-900 outline-none rounded-2xl font-black text-2xl text-slate-800 dark:text-white transition-all shadow-inner"
                   />
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">đ</div>
+                  <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 font-black text-xl">đ</div>
                 </div>
               </div>
 
@@ -276,7 +276,7 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
                   value={formData.ngay}
                   onChange={(e) => setFormData({ ...formData, ngay: e.target.value })}
                   required
-                  className="w-full p-4 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-900 outline-none rounded-2xl font-bold text-slate-800 dark:text-white transition-all shadow-inner"
+                  className="w-full h-[72px] px-6 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-900 outline-none rounded-2xl font-black text-xl text-slate-800 dark:text-white transition-all shadow-inner"
                 />
               </div>
             </div>
