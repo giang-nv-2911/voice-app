@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { IUser, IDebt } from '@/types/debt';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, updateUser, deleteUser, getDebtsByUser } from '@/lib/db';
@@ -13,9 +13,10 @@ import ConfirmModal from '@/components/ConfirmModal';
 
 interface UserManagementProps {
   debts?: IDebt[]; // Changed from any[]
+  autoOpenDebtor?: string;
 }
 
-export default function UserManagement({ debts }: UserManagementProps) {
+export default function UserManagement({ debts, autoOpenDebtor }: UserManagementProps) {
   const { user } = useAuth();
   const isRemote = !!user;
   
@@ -40,6 +41,15 @@ export default function UserManagement({ debts }: UserManagementProps) {
   
   const [modalOpen, setModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<IUser | null>(null);
+
+  useEffect(() => {
+    if (autoOpenDebtor && users.length > 0 && !selectedUser) {
+      const match = users.find(u => u.name === autoOpenDebtor);
+      if (match) {
+        setSelectedUser(match);
+      }
+    }
+  }, [autoOpenDebtor, users, selectedUser]);
 
   const handleEdit = (user: IUser) => {
     setEditingUser(user);

@@ -89,10 +89,7 @@ export default function SummaryTabs({ debts }: { debts: IDebt[] }) {
               </div>
               <span className="text-indigo-300/80 font-black uppercase tracking-widest text-[9px]">Tổng quan tài chính</span>
             </div>
-            <div className="flex flex-col items-end">
-              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Tỉ lệ thu hồi</span>
-              <span className="text-xl font-black text-emerald-400">{stats.recoveryRate}%</span>
-            </div>
+            {/* Tỉ lệ thu hồi hidden as requested */}
           </div>
 
           <div className="space-y-1 mb-8">

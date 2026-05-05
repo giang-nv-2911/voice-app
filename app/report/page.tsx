@@ -20,10 +20,21 @@ type ViewMode = 'summary' | 'users' | 'list' | 'trash';
 export default function ReportPage() {
   const { user } = useAuth();
   const [activeView, setActiveView] = useState<ViewMode>('summary');
+  const [autoOpenDebtor, setAutoOpenDebtor] = useState<string | undefined>(undefined);
   const [rawDebts, setRawDebts] = useState<IDebt[]>([]);
   const [deletedDebts, setDeletedDebts] = useState<IDebt[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab') as ViewMode;
+      const debtor = params.get('debtor');
+      if (tab) setActiveView(tab);
+      if (debtor) setAutoOpenDebtor(debtor);
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -212,7 +223,7 @@ export default function ReportPage() {
                 transition={{ duration: 0.3, ease: "easeOut" }}
               >
                 {activeView === 'summary' && <SummaryTabs debts={filteredDebts} />}
-                {activeView === 'users' && <UserManagement debts={rawDebts} />}
+                {activeView === 'users' && <UserManagement debts={rawDebts} autoOpenDebtor={autoOpenDebtor} />}
                 {activeView === 'list' && <DebtList debts={filteredDebts} />}
                 {activeView === 'trash' && <TrashList debts={deletedDebts} onRefresh={fetchData} />}
               </motion.div>

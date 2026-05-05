@@ -17,6 +17,7 @@ export default function Home() {
   const [lastTranscript, setLastTranscript] = useState<string>("");
   const [showGuide, setShowGuide] = useState(true);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [autoStartMic, setAutoStartMic] = useState(false);
 
   // Initialize guide state from localStorage
   useEffect(() => {
@@ -45,9 +46,18 @@ export default function Home() {
     const data = parseSpeechToDebt(normalizedText);
     setParsedData(data);
 
+    // Reset autoStart once speech is handled
+    setAutoStartMic(false);
+    
     // Auto-hide but keep persistent if it was already hidden
     setShowGuide(false);
     localStorage.setItem('hideGuide', 'true');
+  }, []);
+
+  const handleRetryVoice = useCallback(() => {
+    setParsedData(null);
+    setLastTranscript("");
+    setAutoStartMic(true);
   }, []);
 
   return (
@@ -233,17 +243,31 @@ export default function Home() {
           </div>
         )}
 
-        <VoiceRecorder onResult={handleSpeechResult} />
+        <div className="w-full">
+          <VoiceRecorder onResult={handleSpeechResult} autoStart={autoStartMic} />
+        </div>
 
-        <DebtForm
-          parsedData={parsedData}
-          transcript={lastTranscript}
-          onSaved={() => {
-            setParsedData(null);
-            setLastTranscript("");
-            // Keeping guide hidden after save to maintain focus on next action
-          }}
-        />
+        <AnimatePresence mode="popLayout">
+          {parsedData && (
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, height: 0 }}
+              animate={{ scale: 1, opacity: 1, height: 'auto' }}
+              exit={{ scale: 0.95, opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+              className="w-full mt-4"
+            >
+              <DebtForm
+                parsedData={parsedData}
+                transcript={lastTranscript}
+                onSaved={() => {
+                  setParsedData(null);
+                  setLastTranscript("");
+                }}
+                onRetryVoice={handleRetryVoice}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </main>
   );

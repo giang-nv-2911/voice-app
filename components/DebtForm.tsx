@@ -8,16 +8,19 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
+import { useRouter } from 'next/navigation';
 
 interface DebtFormProps {
   parsedData: ParsedDebtResult | null;
   transcript?: string;
   isEdit?: boolean;
   onSaved: () => void;
+  onRetryVoice?: () => void;
 }
 
-export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: DebtFormProps) {
+export default function DebtForm({ parsedData, transcript, isEdit, onSaved, onRetryVoice }: DebtFormProps) {
   const { user } = useAuth();
+  const router = useRouter();
   const [formData, setFormData] = useState<ParsedDebtResult>({
     nguoi_no: '',
     so_tien: 0,
@@ -162,6 +165,10 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
         }
         setShouldAddUser(false);
         onSaved();
+        
+        if (formData.loai === 'tra' || formData.isClearAll) {
+          router.push(`/report?tab=users&debtor=${encodeURIComponent(debtorName)}`);
+        }
       }, 1000);
     } catch (error) {
       console.error("Error saving debt:", error);
@@ -175,14 +182,6 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
 
   return (
     <div className="w-full max-w-md mt-6 p-7 bg-white dark:bg-slate-900 rounded-[2rem] shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-500 ease-out">
-      {transcript && (
-        <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border-l-4 border-indigo-500">
-          <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-1">Dữ liệu gốc (Máy nghe được)</p>
-          <p className="text-slate-600 dark:text-slate-300 italic font-medium">
-            &ldquo;{transcript}&rdquo;
-          </p>
-        </div>
-      )}
 
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-xl font-extrabold text-slate-800 dark:text-white flex items-center gap-2">
@@ -223,7 +222,7 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
             )}
           </div>
 
-          {isNewUser && formData.nguoi_no && (
+          {isNewUser && formData.nguoi_no && !formData.isClearAll && formData.loai !== 'tra' && (
             <div className="p-3.5 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-100 dark:border-amber-800/30 flex flex-col gap-2.5 animate-in slide-in-from-top-1 duration-200">
               <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
                 <AlertCircle size={16} />
@@ -245,9 +244,35 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
               </label>
             </div>
           )}
+
+          {/* 🚩 UI/UX WARNING: User not found for Repay/Clear actions */}
+          {isNewUser && (formData.loai === 'tra' || formData.isClearAll) && (
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="p-5 bg-rose-500/10 border-2 border-rose-500/30 rounded-2xl flex flex-col items-center text-center gap-3"
+            >
+              <div className="w-12 h-12 bg-rose-500 rounded-full flex items-center justify-center shadow-lg shadow-rose-500/20">
+                <AlertCircle className="text-white" size={24} />
+              </div>
+              <div>
+                <p className="text-rose-600 dark:text-rose-400 font-extrabold text-sm uppercase tracking-wider mb-1">Không tìm thấy người này!</p>
+                <p className="text-slate-600 dark:text-slate-400 text-xs font-bold leading-relaxed px-2">
+                  Bạn không thể <span className="text-rose-500">{formData.isClearAll ? 'xóa hết nợ' : 'trả nợ'}</span> cho <span className="text-slate-800 dark:text-white">&ldquo;{formData.nguoi_no}&rdquo;</span> vì họ chưa tồn tại trong danh sách.
+                </p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => onRetryVoice ? onRetryVoice() : window.location.reload()}
+                className="mt-2 w-full py-3 bg-rose-500 hover:bg-rose-600 text-white font-black uppercase tracking-widest text-[10px] rounded-xl transition-all shadow-md shadow-rose-500/20 active:scale-95"
+              >
+                 Vui lòng nói lại tên khác
+              </button>
+            </motion.div>
+          )}
         </div>
 
-        {!formData.isClearAll ? (
+        {!formData.isClearAll && !(isNewUser && formData.loai === 'tra') ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -302,27 +327,30 @@ export default function DebtForm({ parsedData, transcript, isEdit, onSaved }: De
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={isSaving}
-          className={`w-full py-5 rounded-[1.75rem] font-black text-lg flex items-center justify-center gap-3 shadow-xl transition-all active:scale-95 disabled:opacity-30 disabled:grayscale-[0.5] ${formData.isClearAll
-              ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-200/50'
-              : (formData.loai === 'tra'
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200/50'
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200/50')
-            }`}
-        >
-          {isSaving ? (
-            <Loader2 className="animate-spin" size={24} />
-          ) : (
-            <>
-              <Save size={24} />
-              {isEdit
-                ? 'Cập nhật thay đổi'
-                : (formData.isClearAll ? 'Xác nhận xóa sạch nợ' : (formData.loai === 'tra' ? 'Xác nhận trả nợ' : (matchedUser ? 'Ghi nợ thêm' : 'Lưu nợ mới')))}
-            </>
-          )}
-        </button>
+        {/* Nút lưu chỉ hiển thị khi KHÔNG có lỗi User Not Found */}
+        {!(isNewUser && (formData.loai === 'tra' || formData.isClearAll)) && (
+          <button
+            type="submit"
+            disabled={isSaving}
+            className={`w-full py-5 rounded-[1.75rem] font-black text-lg flex items-center justify-center gap-3 shadow-xl transition-all active:scale-95 disabled:opacity-30 disabled:grayscale-[0.5] ${formData.isClearAll
+                ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-200/50'
+                : (formData.loai === 'tra'
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200/50'
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200/50')
+              }`}
+          >
+            {isSaving ? (
+              <Loader2 className="animate-spin" size={24} />
+            ) : (
+              <>
+                <Save size={24} />
+                {isEdit
+                  ? 'Cập nhật thay đổi'
+                  : (formData.isClearAll ? 'Xác nhận xóa sạch nợ' : (formData.loai === 'tra' ? 'Xác nhận trả nợ' : (matchedUser ? 'Ghi nợ thêm' : 'Lưu nợ mới')))}
+              </>
+            )}
+          </button>
+        )}
       </form>
     </div>
   );

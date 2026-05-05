@@ -6,9 +6,10 @@ import { useEffect } from 'react';
 
 interface VoiceRecorderProps {
   onResult: (text: string) => void;
+  autoStart?: boolean;
 }
 
-export default function VoiceRecorder({ onResult }: VoiceRecorderProps) {
+export default function VoiceRecorder({ onResult, autoStart }: VoiceRecorderProps) {
   const {
     isRecording,
     transcript,
@@ -26,6 +27,16 @@ export default function VoiceRecorder({ onResult }: VoiceRecorderProps) {
       onResult(finalTranscript);
     }
   }, [isRecording, transcript, onResult]);
+
+  useEffect(() => {
+    if (autoStart && hasChecked && isSupported && !isRecording) {
+      // Small delay to ensure the UI has transitioned and audio context is ready
+      const timer = setTimeout(() => {
+        startRecording();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [autoStart, hasChecked, isSupported, isRecording, startRecording]);
 
   if (!hasChecked) {
     return (
