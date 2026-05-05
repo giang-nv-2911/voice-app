@@ -37,8 +37,12 @@ export default function Home() {
 
   const handleSpeechResult = useCallback((text: string) => {
     if (text.trim().split(" ").length < 2) return;
-    setLastTranscript(text);
-    const data = parseSpeechToDebt(text);
+    
+    // Chuẩn hóa phát âm: Thay thế "chả" bằng "trả" (thường bị nhận diện sai khi voice)
+    const normalizedText = text.replace(/\bchả\b/gi, 'trả');
+    
+    setLastTranscript(normalizedText);
+    const data = parseSpeechToDebt(normalizedText);
     setParsedData(data);
 
     // Auto-hide but keep persistent if it was already hidden
