@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '@/lib/api';
 
 export interface User {
@@ -14,24 +14,35 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchUser = async (token?: string) => {
-    try {
-      // Nếu có truyền token trực tiếp (vừa login xong)
-      const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-      const response = await api.get('/api/me', config);
-      setUser(response.data);
-    } catch {
+  const fetchUser = useCallback(async (customToken?: string) => {
+    const token = customToken || (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
+    
+    if (!token) {
       setUser(null);
-      localStorage.removeItem('token');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Gửi header trực tiếp để chắc chắn nhất đối với iOS
+      const response = await api.get('/api/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setUser(response.data);
+    } catch (err) {
+      console.error('Fetch user failed', err);
+      setUser(null);
+      if (!customToken) {
+        localStorage.removeItem('token');
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const logout = () => {
     localStorage.removeItem('token');
     setUser(null);
-    // Redirect to login or home if needed
     window.location.href = '/';
   };
 
@@ -39,29 +50,27 @@ export function useAuth() {
     const initAuth = async () => {
       if (typeof window === 'undefined') return;
 
-      // 1. Kiểm tra Token từ URL (sau khi Google Redirect)
+      // 1. Ưu tiên lấy Token từ URL (iOS/Safari redirect handler)
       const urlParams = new URLSearchParams(window.location.search);
       const tokenFromUrl = urlParams.get('token');
 
       if (tokenFromUrl) {
+        console.log('Token detected in URL, saving...');
         localStorage.setItem('token', tokenFromUrl);
-        // Xóa token khỏi URL cho sạch đẹp
-        const cleanUrl = window.location.pathname + window.location.hash;
+        
+        // Làm sạch URL ngay lập tức
+        const cleanUrl = window.location.origin + window.location.pathname;
         window.history.replaceState({}, document.title, cleanUrl);
+        
         await fetchUser(tokenFromUrl);
       } else {
-        // 2. Nếu không có ở URL, kiểm tra ở localStorage
-        const savedToken = localStorage.getItem('token');
-        if (savedToken) {
-          await fetchUser();
-        } else {
-          setLoading(false);
-        }
+        // 2. Nếu không có ở URL, lấy từ bộ nhớ
+        await fetchUser();
       }
     };
 
     initAuth();
-  }, []);
+  }, [fetchUser]);
 
-  return { user, loading, logout, refresh: () => fetchUser() };
+  return { user, loading, logout, refresh: fetchUser };
 }
